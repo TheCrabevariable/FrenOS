@@ -4,7 +4,7 @@ Arch Linux automated installer ISO with Hyprland, Quickshell Tokyo Night bar, an
 
 ## Features
 
-- **Automated install** — interactive stage1 with disk selection, user setup, timezone
+- **Automated install** — interactive stage1 with keyboard layout, disk selection, user setup, timezone
 - **Single reboot** — stage2 can run in chroot during install, or on first boot via systemd oneshot
 - **Tokyo Night theme** — dark theme across bar, kitty, fastfetch, fren, btop, zed, hyprlock, SDDM, GRUB
 - **Quickshell bar** — app launcher (SUPER+R), theme switcher (SUPER+T), monitor manager (SUPER+D), power menu (SUPER+ESC), clickable WiFi/BT/power profile pills, color-coded CPU, clipboard manager, media player (mpd-mpris), calendar, audio mixer, notification center, network popup
@@ -21,6 +21,7 @@ arf-linux/               # Installer scripts, dotfiles, patches
   packages.txt           # Official + AUR package list
   dotfiles/              # Default configs for hypr, kitty, btop, fastfetch, zsh, etc.
     quickshell-full/     # Full Quickshell config (menu, cliphist, mpd-mpris, etc.)
+    firefox/             # Firefox policies (uBlock Origin + Tokyo Night V3)
 arf-linux-iso/           # ISO build profile
   build.sh               # Builds the bootable ISO with archiso
   profiledir/            # archiso config, airootfs overlay, arf-installer
@@ -45,9 +46,8 @@ Requires `archiso` on an Arch Linux system. Output: `out/arf-linux-<date>-x86_64
 
 1. Write ISO to USB: `sudo dd if=arf-linux-<date>-x86_64.iso of=/dev/sdX bs=4M status=progress && sync`
 2. Boot from USB — `arf-installer` auto-launches
-3. Follow prompts: disk → WiFi (optional) → hostname/user/password/timezone → confirm wipe
+3. Follow prompts: keyboard layout → disk → WiFi (optional) → kernel → hostname/user/password/timezone → confirm wipe
 4. Reboot → SDDM → Hyprland + Quickshell bar (stage2 runs as systemd oneshot on first boot)
-   - Or run `arf-installer --chroot` during install to run stage2 before first reboot (saves one reboot)
 
 ## Screenshots
 
@@ -85,7 +85,8 @@ Requires `archiso` on an Arch Linux system. Output: `out/arf-linux-<date>-x86_64
 ## Post-Install
 
 Stage2 installs:
-- **AUR packages:** helium-browser-bin, animu-bin, vesktop-bin, fren-bin
+- **AUR packages:** animu-bin, fren-bin, heroic-games-launcher-bin, vesktop, wlogout
+- **Firefox:** pre-configured with uBlock Origin and Tokyo Night V3 (xMdb) theme via policies.json
 - **Flatpaks:** Heroic Game Launcher
 - **Dotfiles:** hyprland, kitty, btop, fastfetch, fren, zed, zsh, rmpc
 - **Wallpapers:** cloned from [TheCrabevariable/Wallpaper](https://github.com/TheCrabevariable/Wallpaper)
