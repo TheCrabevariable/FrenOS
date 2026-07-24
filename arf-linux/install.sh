@@ -114,7 +114,6 @@ stage2() {
   fi
 
   AUR=(
-    helium-browser-bin
     animu-bin
     fren-bin
     heroic-games-launcher-bin

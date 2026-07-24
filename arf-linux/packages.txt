@@ -57,7 +57,6 @@ flatpak
 flatpak-xdg-utils
 
 # AUR packages
-helium-browser-bin
 animu-bin
 fren-bin
 heroic-games-launcher-bin

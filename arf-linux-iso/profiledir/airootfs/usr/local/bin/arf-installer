@@ -10,6 +10,13 @@ err()   { gum style "==> $*" --foreground "#ff0000" --bold >&2; exit 1; }
 
 gum style --border double --padding "1 2" --foreground "#00ffff" --bold "arf-linux Installer"
 
+# ── Keyboard layout ─────────────────────────────────────────
+info "Loading keyboard layouts..."
+KBD_LAYOUT=$(find /usr/share/kbd/keymaps -name "*.map.gz" | sed 's|.*/||;s|\.map\.gz||' | sort | gum filter --placeholder "Type to search (e.g. us, de, fr)..." --header "Select keyboard layout" --height 15)
+[ -z "$KBD_LAYOUT" ] && KBD_LAYOUT="us"
+loadkeys "$KBD_LAYOUT" 2>/dev/null || true
+ok "Keyboard layout: $KBD_LAYOUT"
+
 # ── Detect arf-linux source ───────────────────────────────────
 ARF_SRC="/opt/arf-linux"
 if [ ! -d "$ARF_SRC" ]; then
@@ -127,6 +134,10 @@ mkdir -p /mnt/boot
 mount "$PART1" /mnt/boot
 
 ok "Partitions created and mounted"
+
+# Write keyboard layout to installed system
+mkdir -p /mnt/etc
+echo "KEYMAP=$KBD_LAYOUT" > /mnt/etc/vconsole.conf
 
 # ── Kernel selection ──────────────────────────────────────────
 KERNEL=$(gum choose --header "Choose kernel" "linux" "linux-zen")
