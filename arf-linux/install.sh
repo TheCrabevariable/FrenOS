@@ -95,7 +95,7 @@ stage2() {
     quickshell ttf-hack-nerd ttf-nerd-fonts-symbols noto-fonts-emoji sddm qt5-graphicaleffects qt5-quickcontrols2 qt5-svg opencode gnome-disk-utility imv mpv pavucontrol yt-dlp
     bluetui bluez bluez-utils playerctl brightnessctl lm_sensors breeze-cursors cliphist
     pipewire pipewire-pulse wireplumber power-profiles-daemon inotify-tools rsync
-    xdg-desktop-portal xdg-desktop-portal-hyprland udiskie wlr-randr bazaar grub-btrfs flatpak flatpak-xdg-utils gvfs udisks2 btop xdg-user-dirs libreoffice-fresh
+    xdg-desktop-portal xdg-desktop-portal-hyprland udiskie wlr-randr bazaar grub-btrfs flatpak flatpak-xdg-utils gvfs udisks2 btop xdg-user-dirs libreoffice-fresh firefox
   )
 
   pacman -S --noconfirm --needed "${OFFICIAL[@]}" os-prober
@@ -164,7 +164,7 @@ stage2() {
   for dir in "$DOTFILES"/*/; do
     app="$(basename "$dir")"
     case "$app" in
-      quickshell-patch|dunst) continue ;;
+      quickshell-patch|dunst|firefox) continue ;;
       quickshell-full) app="quickshell" ;;
     esac
     target="$USER_HOME/.config/$app"
@@ -261,6 +261,12 @@ SDDM
   grub-mkconfig -o /boot/grub/grub.cfg
   systemctl enable grub-btrfsd 2>/dev/null || true
   ok "GRUB configured"
+
+  # ── Firefox policies ──────────────────────────────────────────────
+  info "Installing Firefox policies..."
+  mkdir -p /usr/lib/firefox/distribution
+  cp "$DOTFILES/firefox/policies.json" /usr/lib/firefox/distribution/policies.json
+  ok "Firefox policies installed (uBlock Origin + Tokyo Night V3)"
 
   # Fix any root-owned files in $USER_HOME (mkdir/cp as root in chroot)
   chown -R "$USERNAME:" "$USER_HOME" 2>/dev/null || true

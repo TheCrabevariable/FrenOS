@@ -50,6 +50,7 @@ bazaar
 grub-btrfs
 libreoffice-fresh
 vesktop
+firefox
 cliphist
 xdg-user-dirs
 flatpak
