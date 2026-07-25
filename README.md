@@ -1,4 +1,4 @@
-# arf-linux
+# FrenOS
 
 Arch Linux automated installer ISO with Hyprland, Quickshell Tokyo Night bar, and single-reboot post-install configuration.
 
@@ -40,18 +40,18 @@ cd arf-linux-iso
 sudo ./build.sh
 ```
 
-Requires `archiso` on an Arch Linux system. Output: `out/arf-linux-<date>-x86_64.iso`.
+Requires `archiso` on an Arch Linux system. Output: `out/FrenOS-<date>-x86_64.iso`.
 
 ## Install
 
-1. Write ISO to USB: `sudo dd if=arf-linux-<date>-x86_64.iso of=/dev/sdX bs=4M status=progress && sync`
+1. Write ISO to USB: `sudo dd if=FrenOS-<date>-x86_64.iso of=/dev/sdX bs=4M status=progress && sync`
 2. Boot from USB — `arf-installer` auto-launches
 3. Follow prompts: keyboard layout → disk → WiFi (optional) → kernel → hostname/user/password/timezone → confirm wipe
 4. Reboot → SDDM → Hyprland + Quickshell bar (stage2 runs as systemd oneshot on first boot)
 
 ## Screenshots
 
-![arf-linux](arf.png)
+![FrenOS](arf.png)
 
 ## Keybinds
 

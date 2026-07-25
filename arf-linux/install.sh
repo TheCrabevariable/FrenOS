@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# ── arf-linux ──────────────────────────────────────────────────
+# ── FrenOS ──────────────────────────────────────────────────
 # Opinionated Arch Linux installer — like Omarchy, but mine
 # Usage: bash install.sh
 # ────────────────────────────────────────────────────────────────
@@ -20,10 +20,10 @@ USERNAME="${USERNAME:-$USER}"
 stage1() {
   clear
   echo "============================================"
-  echo "  arf-linux Stage 1 — Base install"
+  echo "  FrenOS Stage 1 — Base install"
   echo "============================================"
   echo ""
-  echo "If booted from the arf-linux ISO, the"
+  echo "If booted from the FrenOS ISO, the"
   echo "automated installer will run. This manual"
   echo "mode is for advanced users only."
   echo ""
