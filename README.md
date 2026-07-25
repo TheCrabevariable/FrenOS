@@ -31,7 +31,7 @@ arf-linux-iso/           # ISO build profile
 
 ## Download
 
-Pre-built ISOs are available from the [releases page](https://github.com/TheCrabevariable/arf-linux/releases) (recommended).
+Pre-built ISOs are available from the [releases page](https://github.com/TheCrabevariable/FrenOS/releases) (recommended).
 
 ## Build from source
 
