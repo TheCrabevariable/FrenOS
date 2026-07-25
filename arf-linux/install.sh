@@ -61,6 +61,11 @@ stage2() {
 
   pacman -Syu --noconfirm
 
+  # ── Brand as FrenOS ────────────────────────────────────────
+  info "Branding system as FrenOS..."
+  sed -i 's/^NAME="Arch Linux"/NAME="FrenOS"/' /etc/os-release 2>/dev/null || true
+  sed -i 's/^PRETTY_NAME="Arch Linux"/PRETTY_NAME="FrenOS (Arch Linux)"/' /etc/os-release 2>/dev/null || true
+
   # ── Graphics drivers (before Steam so no prompt) ──────────────
   info "Detecting GPU and installing drivers..."
   GPU_VENDOR=$(lspci -k | grep -E "(VGA|3D)" | grep -iEo "(nvidia|amd|intel)" | head -1 | tr '[:upper:]' '[:lower:]')
