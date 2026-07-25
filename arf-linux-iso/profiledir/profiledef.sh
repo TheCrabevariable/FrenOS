@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
 # shellcheck disable=SC2034
 
-iso_name="arf-linux"
-iso_label="ARFLINUX_$(date +%Y%m)"
-iso_publisher="arf-linux"
-iso_application="arf-linux Live/Installation ISO"
+iso_name="frenos"
+iso_label="FRENOS_$(date +%Y%m)"
+iso_publisher="FrenOS"
+iso_application="FrenOS Live/Installation ISO"
 iso_version="$(date +%Y.%m)"
 install_dir="arch"
 buildmodes=('iso')

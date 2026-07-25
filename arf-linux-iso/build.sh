@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# ── arf-linux ISO builder ─────────────────────────────────────
+# ── FrenOS ISO builder ─────────────────────────────────────
 # Builds a custom Arch Linux live ISO with automated installer.
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
@@ -64,5 +64,5 @@ sudo mkarchiso -v -w "$WORK_DIR" -o "$OUT_DIR" "$PROFILE"
 sudo chown -R "$(whoami):$(whoami)" "$OUT_DIR" 2>/dev/null || true
 
 echo ""
-echo "✅ ISO built: $OUT_DIR/arf-linux-*.iso"
-echo "   Write to USB: sudo dd if=$OUT_DIR/arf-linux-*.iso of=/dev/sdX bs=4M status=progress && sync"
+echo "✅ ISO built: $OUT_DIR/FrenOS-*.iso"
+echo "   Write to USB: sudo dd if=$OUT_DIR/FrenOS-*.iso of=/dev/sdX bs=4M status=progress && sync"

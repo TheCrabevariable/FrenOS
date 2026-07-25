@@ -10,6 +10,8 @@ zed
 steam
 kitty
 fastfetch
+chafa
+imagemagick
 rmpc
 mpd
 mpd-mpris
@@ -47,13 +49,14 @@ os-prober
 bazaar
 grub-btrfs
 libreoffice-fresh
+vesktop
+firefox
 cliphist
 xdg-user-dirs
 flatpak
 flatpak-xdg-utils
 
 # AUR packages
-helium-browser-bin
 animu-bin
 fren-bin
 heroic-games-launcher-bin

@@ -278,7 +278,7 @@ SDDM
     sleep 5
     systemctl reboot
   else
-    echo "  Reboot to start SDDM and enjoy arf-linux!"
+    echo "  Reboot to start SDDM and enjoy FrenOS!"
   fi
 }
 

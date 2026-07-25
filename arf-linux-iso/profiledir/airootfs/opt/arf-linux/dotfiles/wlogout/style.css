@@ -1,58 +1,106 @@
 * {
-    all: unset;
-    font-family: "Hack Nerd Font";
+	background-image: none;
 }
 
 window {
-    background-color: rgba(26, 27, 38, 0.85);
+	background-color: rgba(17, 17, 27, 0.6);
 }
 
 button {
-    margin: 8px;
-    padding: 20px 32px;
-    border-radius: 12px;
-    border: 2px solid rgba(60, 68, 92, 0.6);
-    background-color: rgba(36, 40, 59, 0.9);
-    color: #c0caf5;
-    font-size: 16px;
-    min-width: 140px;
-    min-height: 70px;
+  color: #7d9bba;
+	background-color: rgba(17, 17, 27, 0.0);
+	outline-style: none;
+	border: none;
+	border-width: 0px;
+	background-repeat: no-repeat;
+	background-position: center;
+	background-size: 10%;
+	border-radius: 20px;
+	box-shadow: none;
+	text-shadow: none;
+  animation: gradient_f 20s ease-in infinite;
 }
 
-button:hover {
-    background-color: rgba(36, 40, 59, 1);
+button:hover#lock {
+	background-color: #6464c8;
+	/* background-size: 25%; */
+	/* margin-right : 30px; */
+	/* margin-bottom : 30px; */
+	/* border-radius: 20px; */
+  /* animation: gradient_f 20s ease-in infinite; */
+  /* transition: all 0.3s cubic-bezier(.55,0.0,.28,1.682); */
 }
 
-button:focus {
-    background-color: rgba(36, 40, 59, 1);
+button:hover#logout {
+	background-color: #6464c8;
+	/* background-size: 25%; */
+	/* margin-right : 30px; */
+	/* margin-top : 30px; */
+	/* border-radius: 20px; */
+ /*  animation: gradient_f 20s ease-in infinite; */
+	/* transition: all 0.3s cubic-bezier(.55,0.0,.28,1.682); */
 }
 
-button.lock:hover,
-button.lock:focus {
-    border-color: #9ece6a;
+button:hover#shutdown {
+	background-color: #6464c8;
+	/* background-size: 25%; */
+	/* margin-left : 20px; */
+	/* margin-bottom : 30px; */
+	/* border-radius: 20px; */
+  /* animation: gradient_f 20s ease-in infinite; */
+	/* transition: all 0.3s cubic-bezier(.55,0.0,.28,1.682); */
 }
 
-button.logout:hover,
-button.logout:focus {
-    border-color: #e0af68;
+button:hover#reboot {
+	background-color: #6464c8;
+	/* background-size: 25%; */
+	/* margin-left : 30px; */
+	/* margin-top : 30px; */
+	/* border-radius: 20px; */
+  /* animation: gradient_f 20s ease-in infinite; */
+	/* transition: all 0.3s cubic-bezier(.55,0.0,.28,1.682); */
 }
 
-button.suspend:hover,
-button.suspend:focus {
-    border-color: #2ac3de;
+button:hover#suspend {
+	background-color: #6464c8;
+	/* background-size: 25%; */
+	/* margin-left : 30px; */
+	/* margin-top : 30px; */
+	/* border-radius: 20px; */
+  /* animation: gradient_f 20s ease-in infinite; */
+	/* transition: all 0.3s cubic-bezier(.55,0.0,.28,1.682); */
 }
 
-button.hibernate:hover,
-button.hibernate:focus {
-    border-color: #bb9af7;
+button:hover#hibernate {
+	background-color: #6464c8;
+	/* background-size: 25%; */
+	/* margin-left : 30px; */
+	/* margin-top : 30px; */
+	/* border-radius: 20px; */
+  /* animation: gradient_f 20s ease-in infinite; */
+	/* transition: all 0.3s cubic-bezier(.55,0.0,.28,1.682); */
 }
 
-button.reboot:hover,
-button.reboot:focus {
-    border-color: #f7768e;
+#lock {
+  background-image: image(url("/usr/share/wlogout/icons/lock.png"), url("/usr/local/share/wlogout/icons/lock.png"));
 }
 
-button.shutdown:hover,
-button.shutdown:focus {
-    border-color: #ff0000;
+#logout {
+  background-image: image(url("/usr/share/wlogout/icons/logout.png"), url("/usr/local/share/wlogout/icons/logout.png"));
+}
+
+#shutdown {
+  background-image: image(url("/usr/share/wlogout/icons/shutdown.png"), url("/usr/local/share/wlogout/icons/shutdown.png"));
+}
+
+#reboot {
+  background-image: image(url("/usr/share/wlogout/icons/reboot.png"), url("/usr/local/share/wlogout/icons/reboot.png"));
+}
+
+#suspend {
+  background-image: image(url("/usr/share/wlogout/icons/suspend.png"), url("/usr/local/share/wlogout/icons/suspend.png"));
+}
+
+#hibernate {
+  background-image: image(url("/usr/share/wlogout/icons/hibernate.png"), url("/usr/local/share/wlogout/icons/hibernate.png"));
 }

@@ -8,7 +8,7 @@ info()  { gum style ":: $*" --foreground "#00ffff"; }
 ok()    { gum style "==> $*" --foreground "#00ff00" --bold; }
 err()   { gum style "==> $*" --foreground "#ff0000" --bold >&2; exit 1; }
 
-gum style --border double --padding "1 2" --foreground "#00ffff" --bold "arf-linux Installer"
+gum style --border double --padding "1 2" --foreground "#00ffff" --bold "FrenOS Installer"
 
 # ── Keyboard layout ─────────────────────────────────────────
 info "Loading keyboard layouts..."
