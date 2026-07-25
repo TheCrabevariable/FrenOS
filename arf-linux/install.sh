@@ -168,7 +168,7 @@ stage2() {
   for dir in "$DOTFILES"/*/; do
     app="$(basename "$dir")"
     case "$app" in
-      quickshell-patch|dunst|firefox) continue ;;
+      quickshell-patch|dunst|firefox|frenos) continue ;;
       quickshell-full) app="quickshell" ;;
     esac
     target="$USER_HOME/.config/$app"
@@ -187,6 +187,13 @@ stage2() {
 
   mkdir -p "$USER_HOME/.config/mpd/playlists"
   touch "$USER_HOME/.config/mpd/database"
+
+  # Install update-fos script
+  if [ -f "$DOTFILES/frenos/update-fos" ]; then
+    cp "$DOTFILES/frenos/update-fos" /usr/local/bin/update-fos
+    chmod +x /usr/local/bin/update-fos
+    ok "Installed update-fos (run 'update-fos' to update FrenOS)"
+  fi
   chown -R "$USERNAME:" "$USER_HOME/.config/mpd" 2>/dev/null || true
 
   xdg-user-dirs-update 2>/dev/null || true
