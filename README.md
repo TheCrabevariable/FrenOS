@@ -4,7 +4,7 @@ Arch Linux automated installer ISO with Hyprland, Quickshell Tokyo Night bar, an
 
 ## Features
 
-- **Automated install** — interactive stage1 with keyboard layout, disk selection, user setup, timezone
+- **Automated install** — interactive stage1 with keyboard layout, disk selection, swap size, kernel choice, user setup, timezone
 - **Single reboot** — stage2 can run in chroot during install, or on first boot via systemd oneshot
 - **Tokyo Night theme** — dark theme across bar, kitty, fastfetch, fren, btop, zed, hyprlock, SDDM, GRUB
 - **Quickshell bar** — app launcher (SUPER+R), theme switcher (SUPER+T), monitor manager (SUPER+D), power menu (SUPER+ESC), clickable WiFi/BT/power profile pills, color-coded CPU, clipboard manager, media player (mpd-mpris), calendar, audio mixer, notification center, network popup
@@ -22,6 +22,7 @@ arf-linux/               # Installer scripts, dotfiles, patches
   dotfiles/              # Default configs for hypr, kitty, btop, fastfetch, zsh, etc.
     quickshell-full/     # Full Quickshell config (menu, cliphist, mpd-mpris, etc.)
     firefox/             # Firefox policies (uBlock Origin + Tokyo Night V3)
+    frenos/              # FrenOS updater script (update-fos)
 arf-linux-iso/           # ISO build profile
   build.sh               # Builds the bootable ISO with archiso
   profiledir/            # archiso config, airootfs overlay, arf-installer
@@ -46,8 +47,12 @@ Requires `archiso` on an Arch Linux system. Output: `out/FrenOS-<date>-x86_64.is
 
 1. Write ISO to USB: `sudo dd if=FrenOS-<date>-x86_64.iso of=/dev/sdX bs=4M status=progress && sync`
 2. Boot from USB — `arf-installer` auto-launches
-3. Follow prompts: keyboard layout → disk → WiFi (optional) → kernel → hostname/user/password/timezone → confirm wipe
+3. Follow prompts: keyboard layout → disk → swap (none/4GB/8GB) → WiFi (optional) → kernel → hostname/user/password/timezone → confirm wipe
 4. Reboot → SDDM → Hyprland + Quickshell bar (stage2 runs as systemd oneshot on first boot)
+
+## Updating
+
+Run `update-fos` to pull the latest FrenOS dotfiles and configs from GitHub.
 
 ## Screenshots
 
