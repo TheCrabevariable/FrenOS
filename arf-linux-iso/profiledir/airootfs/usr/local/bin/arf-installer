@@ -34,10 +34,18 @@ if command -v nmcli &>/dev/null && nmcli radio wifi | grep -q enabled; then
   nmcli dev wifi list --rescan yes 2>/dev/null | head -40 || true
   WIFI_SSID=$(gum input --placeholder "SSID or leave blank to skip" --prompt "WiFi SSID> ")
   if [ -n "$WIFI_SSID" ]; then
-    WIFI_PASS=$(gum input --password --placeholder "Password" --prompt "WiFi password> ")
-    info "Connecting to ${WIFI_SSID}..."
-    nmcli dev wifi connect "$WIFI_SSID" password "$WIFI_PASS" 2>&1 || err "Failed to connect to WiFi"
-    ok "Connected to ${WIFI_SSID}"
+    WIFIConnected=false
+    while [ "$WIFIConnected" = false ]; do
+      WIFI_PASS=$(gum input --password --placeholder "Password" --prompt "WiFi password> ")
+      info "Connecting to ${WIFI_SSID}..."
+      if nmcli dev wifi connect "$WIFI_SSID" password "$WIFI_PASS" 2>&1; then
+        ok "Connected to ${WIFI_SSID}"
+        WIFIConnected=true
+      else
+        info "Failed to connect to ${WIFI_SSID}"
+        gum confirm --affirmative "Retry" --negative "Skip WiFi" "Try again?" || break
+      fi
+    done
   fi
 else
   info "No WiFi device detected — will use Ethernet (if available)"
