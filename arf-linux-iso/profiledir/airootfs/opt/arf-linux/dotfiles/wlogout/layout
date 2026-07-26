@@ -1,6 +1,6 @@
 {
     "label" : "logout",
-    "action" : "hyprctl dispatch exit 0",
+    "action" : "loginctl terminate-user $USER",
     "text" : "Logout",
     "keybind" : "e"
 }

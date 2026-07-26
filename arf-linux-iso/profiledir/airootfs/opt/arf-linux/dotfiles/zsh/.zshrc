@@ -23,6 +23,7 @@ alias update="sudo pacman -Syu"
 alias remove="sudo pacman -Rns"
 alias clean="sudo pacman -Scc"
 alias ff="fastfetch"
+alias music-dl="yt-dlp --embed-thumbnail --no-playlist --embed-metadata -x --audio-format mp3 -o \"%(artist)s - %(title)s.%(ext)s\""
 
 # Fren emoji icons
 export FREN_ICON_MODE=emoji

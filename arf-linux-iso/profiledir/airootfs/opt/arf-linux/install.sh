@@ -187,7 +187,15 @@ stage2() {
   fi
 
   mkdir -p "$USER_HOME/.config/mpd/playlists"
+  mkdir -p "$USER_HOME/Music"
   touch "$USER_HOME/.config/mpd/database"
+  chown -R "$USERNAME:" "$USER_HOME/.config/mpd" 2>/dev/null || true
+  chown -R "$USERNAME:" "$USER_HOME/Music" 2>/dev/null || true
+
+  # Initialize mpd database
+  sudo -u "$USERNAME" bash -c "XDG_RUNTIME_DIR=/run/user/$(id -u "$USERNAME") systemctl --user start mpd 2>/dev/null" || true
+  sleep 2
+  sudo -u "$USERNAME" bash -c "XDG_RUNTIME_DIR=/run/user/$(id -u "$USERNAME") mpc update 2>/dev/null" || true
 
   # Install update-fos script
   if [ -f "$DOTFILES/frenos/update-fos" ]; then
