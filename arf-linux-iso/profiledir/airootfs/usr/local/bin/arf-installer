@@ -307,7 +307,7 @@ fi
 info "Running stage2 in chroot..."
 cp /etc/resolv.conf /mnt/etc/resolv.conf 2>/dev/null || true
 if arch-chroot /mnt bash -c "
-  export USERNAME=$USERNAME HOME=/home/$USERNAME
+  export USERNAME=$USERNAME HOME=/home/$USERNAME PARALLEL_DL=$PARALLEL_DL
   bash /home/$USERNAME/arf-linux/install.sh --stage2
   # Disable the first-boot service since we ran successfully in chroot
   rm -f /etc/systemd/system/multi-user.target.wants/arf-stage2.service
