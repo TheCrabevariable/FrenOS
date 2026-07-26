@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# ── arf-linux ──────────────────────────────────────────────────
+# ── FrenOS ──────────────────────────────────────────────────
 # Opinionated Arch Linux installer — like Omarchy, but mine
 # Usage: bash install.sh
 # ────────────────────────────────────────────────────────────────
@@ -20,10 +20,10 @@ USERNAME="${USERNAME:-$USER}"
 stage1() {
   clear
   echo "============================================"
-  echo "  arf-linux Stage 1 — Base install"
+  echo "  FrenOS Stage 1 — Base install"
   echo "============================================"
   echo ""
-  echo "If booted from the arf-linux ISO, the"
+  echo "If booted from the FrenOS ISO, the"
   echo "automated installer will run. This manual"
   echo "mode is for advanced users only."
   echo ""
@@ -43,7 +43,8 @@ stage2() {
   info "Stage 2: Installing packages"
 
   # Tweak pacman.conf
-  sed -i 's/^#Color/Color/; s/^#ParallelDownloads = 5/ParallelDownloads = 4/' /etc/pacman.conf
+  local PARALLEL="${PARALLEL_DL:-1}"
+  sed -i "s/^#Color/Color/; s|^#ParallelDownloads = 5|ParallelDownloads = ${PARALLEL}|" /etc/pacman.conf
   grep -q '^ILoveCandy' /etc/pacman.conf || sed -i '/^Color/a ILoveCandy' /etc/pacman.conf
   grep -q '^VerbosePkgLists' /etc/pacman.conf || sed -i '/^Color/a VerbosePkgLists' /etc/pacman.conf
 
@@ -60,6 +61,11 @@ stage2() {
   fi
 
   pacman -Syu --noconfirm
+
+  # ── Brand as FrenOS ────────────────────────────────────────
+  info "Branding system as FrenOS..."
+  sed -i 's/^NAME="Arch Linux"/NAME="FrenOS"/' /etc/os-release 2>/dev/null || true
+  sed -i 's/^PRETTY_NAME="Arch Linux"/PRETTY_NAME="FrenOS (Arch Linux)"/' /etc/os-release 2>/dev/null || true
 
   # ── Graphics drivers (before Steam so no prompt) ──────────────
   info "Detecting GPU and installing drivers..."
@@ -91,7 +97,7 @@ stage2() {
   # Official packages
   OFFICIAL=(
     hyprland hypridle hyprlock hyprpaper hyprshot hyprpolkitagent hyprpicker
-    zed steam kitty fastfetch chafa imagemagick rmpc mpd mpd-mpris networkmanager zsh python
+    zed steam kitty fastfetch chafa imagemagick rmpc mpd mpd-mpris networkmanager zsh python nano
     quickshell ttf-hack-nerd ttf-nerd-fonts-symbols noto-fonts-emoji sddm qt5-graphicaleffects qt5-quickcontrols2 qt5-svg opencode gnome-disk-utility imv mpv pavucontrol yt-dlp
     bluetui bluez bluez-utils playerctl brightnessctl lm_sensors breeze-cursors cliphist
     pipewire pipewire-pulse wireplumber power-profiles-daemon inotify-tools rsync
@@ -151,7 +157,7 @@ stage2() {
   "
 
   # Enable mpd
-  systemctl enable mpd 2>/dev/null || true  
+  systemctl enable mpd 2>/dev/null || true
 
   # ── Dotfiles ──────────────────────────────────────────────────
   info "Applying dotfiles..."
@@ -163,7 +169,7 @@ stage2() {
   for dir in "$DOTFILES"/*/; do
     app="$(basename "$dir")"
     case "$app" in
-      quickshell-patch|dunst|firefox) continue ;;
+      quickshell-patch|dunst|firefox|frenos) continue ;;
       quickshell-full) app="quickshell" ;;
     esac
     target="$USER_HOME/.config/$app"
@@ -182,6 +188,13 @@ stage2() {
 
   mkdir -p "$USER_HOME/.config/mpd/playlists"
   touch "$USER_HOME/.config/mpd/database"
+
+  # Install update-fos script
+  if [ -f "$DOTFILES/frenos/update-fos" ]; then
+    cp "$DOTFILES/frenos/update-fos" /usr/local/bin/update-fos
+    chmod +x /usr/local/bin/update-fos
+    ok "Installed update-fos (run 'update-fos' to update FrenOS)"
+  fi
   chown -R "$USERNAME:" "$USER_HOME/.config/mpd" 2>/dev/null || true
 
   xdg-user-dirs-update 2>/dev/null || true
@@ -278,7 +291,7 @@ SDDM
     sleep 5
     systemctl reboot
   else
-    echo "  Reboot to start SDDM and enjoy arf-linux!"
+    echo "  Reboot to start SDDM and enjoy FrenOS!"
   fi
 }
 

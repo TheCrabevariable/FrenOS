@@ -18,6 +18,7 @@ mpd-mpris
 networkmanager
 zsh
 python
+nano
 quickshell
 ttf-hack-nerd
 sddm

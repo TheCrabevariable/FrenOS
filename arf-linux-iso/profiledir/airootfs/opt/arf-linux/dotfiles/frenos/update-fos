@@ -1,0 +1,56 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# ── FrenOS updater ────────────────────────────────────────────
+# Pulls latest dotfiles and configs from the FrenOS repo.
+
+GREEN='\033[0;32m'; CYAN='\033[0;36m'; NC='\033[0m'
+info()  { printf "${CYAN}::${NC} %s\n" "$*"; }
+ok()    { printf "${GREEN}==>${NC} %s\n" "$*"; }
+
+FOS_DIR="$HOME/arf-linux"
+if [ ! -d "$FOS_DIR/.git" ]; then
+  echo "FrenOS source not found at $FOS_DIR"
+  echo "Clone it: git clone https://github.com/TheCrabevariable/FrenOS.git ~/arf-linux"
+  exit 1
+fi
+
+info "Pulling latest FrenOS..."
+cd "$FOS_DIR"
+git pull --ff-only || {
+  echo "Pull failed. Run 'git pull' manually and resolve conflicts."
+  exit 1
+}
+
+ok "Updated to latest FrenOS ($(git log --oneline -1))"
+
+info "Re-applying dotfiles..."
+
+DOTFILES="$FOS_DIR/dotfiles"
+
+for dir in "$DOTFILES"/*/; do
+  app="$(basename "$dir")"
+  case "$app" in
+    quickshell-patch|dunst|firefox|grub|sddm|wallpapers) continue ;;
+    quickshell-full) app="quickshell" ;;
+  esac
+  target="$HOME/.config/$app"
+  mkdir -p "$target"
+  cp -r "$dir"/* "$target"/ 2>/dev/null || true
+  ok "Updated $app"
+done
+
+# Apply zshrc
+if [ -f "$DOTFILES/zsh/.zshrc" ]; then
+  cp "$DOTFILES/zsh/.zshrc" "$HOME/.zshrc"
+  ok "Updated zsh"
+fi
+
+# Firefox policies
+if [ -f "$DOTFILES/firefox/policies.json" ]; then
+  sudo cp "$DOTFILES/firefox/policies.json" /usr/lib/firefox/distribution/policies.json 2>/dev/null && \
+    ok "Updated Firefox policies" || info "Firefox policies update skipped (needs sudo)"
+fi
+
+echo ""
+ok "FrenOS updated! Restart Quickshell or log out/in for changes to take effect."

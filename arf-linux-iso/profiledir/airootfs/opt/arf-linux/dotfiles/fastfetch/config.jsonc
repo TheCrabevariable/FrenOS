@@ -1,8 +1,8 @@
 {
   "logo": {
     "type": "auto",
-    "source": "~/.config/fastfetch/fren.png",
-    "height": 8,
+    "source": "~/.config/fastfetch/frenlogo.png",
+    "height": 16,
     "color": {
       "1": "38;2;122;162;247",
     },
@@ -62,6 +62,11 @@
     },
     {
       "type": "memory",
+      "keyColor": "38;2;122;162;247",
+      "valueColor": "38;2;192;202;245",
+    },
+    {
+      "type": "disk",
       "keyColor": "38;2;122;162;247",
       "valueColor": "38;2;192;202;245",
     },
