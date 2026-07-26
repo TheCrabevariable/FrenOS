@@ -74,7 +74,20 @@ ok "Mirrorlist optimized"
 
 FS_CHOICE=$(gum choose "btrfs" "ext4" --header "Filesystem")
 SWAP_CHOICE=$(gum choose "none" "4GB" "8GB" --header "Swap size")
+ENCRYPT_CHOICE=$(gum choose "no" "yes" --header "Encrypt root partition with LUKS?" --selected "no")
 PARALLEL_DL=$(gum choose "1" "2" "3" "4" --header "Parallel downloads (pacman)")
+
+# ── LUKS passphrase ────────────────────────────────────────
+LUKS_PASS=""
+if [ "$ENCRYPT_CHOICE" = "yes" ]; then
+  while true; do
+    LUKS_PASS=$(gum input --password --placeholder "LUKS passphrase")
+    LUKS_PASS2=$(gum input --password --placeholder "Confirm passphrase")
+    [ "$LUKS_PASS" = "$LUKS_PASS2" ] && [ -n "$LUKS_PASS" ] && break
+    err "Passphrases don't match or empty. Try again."
+  done
+  info "Root partition will be encrypted with LUKS"
+fi
 
 # ── Confirmation ──────────────────────────────────────────────
 gum confirm --affirmative "Yes, wipe it" --negative "Abort" "⚠️  THIS WILL WIPE ALL DATA ON $DISK" || err "Aborted by user"
@@ -102,22 +115,42 @@ partprobe "$DISK" 2>/dev/null || true
 
 if [ "$FS_CHOICE" = "btrfs" ]; then
   parted -s "$DISK" mkpart primary btrfs 1025MiB 100%
-  sleep 1
-  partprobe "$DISK" 2>/dev/null || true
-  info "Formatting partitions..."
-  mkfs.fat -F32 "$PART1"
+else
+  parted -s "$DISK" mkpart primary ext4 1025MiB 100%
+fi
+sleep 1
+partprobe "$DISK" 2>/dev/null || true
+
+info "Formatting partitions..."
+mkfs.fat -F32 "$PART1"
+
+# ── LUKS encryption ────────────────────────────────────────
+ROOT_DEV="$PART2"
+LUKS_UUID=""
+if [ "$ENCRYPT_CHOICE" = "yes" ]; then
+  info "Encrypting root partition with LUKS..."
   wipefs -a "$PART2" 2>/dev/null || true
-  mkfs.btrfs -f "$PART2"
-  mount "$PART2" /mnt
+  echo -n "$LUKS_PASS" | cryptsetup luksFormat --type luks2 --cipher aes-xts-plain64 --key-size 512 --hash sha256 --iter-time 4000 "$PART2" - 2>/dev/null
+  echo -n "$LUKS_PASS" | cryptsetup open --type luks2 "$PART2" cryptroot - 2>/dev/null
+  ROOT_DEV="/dev/mapper/cryptroot"
+  LUKS_UUID=$(blkid -s UUID -o value "$PART2")
+  ok "LUKS encryption enabled (UUID: $LUKS_UUID)"
+fi
+
+# ── Format root ────────────────────────────────────────────
+wipefs -a "$ROOT_DEV" 2>/dev/null || true
+if [ "$FS_CHOICE" = "btrfs" ]; then
+  mkfs.btrfs -f "$ROOT_DEV"
+  mount "$ROOT_DEV" /mnt
   if gum confirm "Create subvolumes (@, @home, @snapshots)?" --default=true; then
     btrfs subvolume create /mnt/@
     btrfs subvolume create /mnt/@home
     btrfs subvolume create /mnt/@snapshots
     umount /mnt
-    mount -o subvol=@,compress=zstd "$PART2" /mnt
+    mount -o subvol=@,compress=zstd "$ROOT_DEV" /mnt
     mkdir -p /mnt/{home,.snapshots}
-    mount -o subvol=@home,compress=zstd "$PART2" /mnt/home
-    mount -o subvol=@snapshots,compress=zstd "$PART2" /mnt/.snapshots
+    mount -o subvol=@home,compress=zstd "$ROOT_DEV" /mnt/home
+    mount -o subvol=@snapshots,compress=zstd "$ROOT_DEV" /mnt/.snapshots
     if gum confirm "Configure snapper snapshots?" --default=true; then
       SNAPPER_PKG=1
     else
@@ -126,18 +159,12 @@ if [ "$FS_CHOICE" = "btrfs" ]; then
   else
     SNAPPER_PKG=''
     umount /mnt
-    mount -o compress=zstd "$PART2" /mnt
+    mount -o compress=zstd "$ROOT_DEV" /mnt
   fi
 else
   SNAPPER_PKG=''
-  parted -s "$DISK" mkpart primary ext4 1025MiB 100%
-  sleep 1
-  partprobe "$DISK" 2>/dev/null || true
-  info "Formatting partitions..."
-  mkfs.fat -F32 "$PART1"
-  wipefs -a "$PART2" 2>/dev/null || true
-  mkfs.ext4 -F "$PART2"
-  mount "$PART2" /mnt
+  mkfs.ext4 -F "$ROOT_DEV"
+  mount "$ROOT_DEV" /mnt
 fi
 
 mkdir -p /mnt/boot
@@ -153,7 +180,7 @@ if [ "$SWAP_CHOICE" != "none" ]; then
     btrfs property set /mnt/@swap compression none 2>/dev/null || true
     umount /mnt/@swap 2>/dev/null || true
     mkdir -p /mnt/swap
-    mount -o subvol=@swap "$PART2" /mnt/swap
+    mount -o subvol=@swap "$ROOT_DEV" /mnt/swap
     fallocate -l "$SWAP_CHOICE" /mnt/swap/swapfile
     chmod 600 /mnt/swap/swapfile
     mkswap /mnt/swap/swapfile
@@ -261,6 +288,8 @@ mkdir -p /mnt/etc/systemd/system
 echo "USERNAME=${USERNAME}" > /mnt/etc/arf-linux.env
 echo "PARALLEL_DL=${PARALLEL_DL}" >> /mnt/etc/arf-linux.env
 echo "FS_CHOICE=${FS_CHOICE}" >> /mnt/etc/arf-linux.env
+echo "ENCRYPTED=${ENCRYPT_CHOICE}" >> /mnt/etc/arf-linux.env
+[ -n "$LUKS_UUID" ] && echo "LUKS_UUID=${LUKS_UUID}" >> /mnt/etc/arf-linux.env
 
 cat > /mnt/etc/systemd/system/arf-stage2.service <<SERVICE
 [Unit]

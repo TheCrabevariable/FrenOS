@@ -36,3 +36,4 @@ pacman-mirrorlist
 reflector
 rsync
 gum
+cryptsetup

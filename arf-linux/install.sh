@@ -101,7 +101,7 @@ stage2() {
     quickshell ttf-hack-nerd ttf-nerd-fonts-symbols noto-fonts-emoji sddm qt5-graphicaleffects qt5-quickcontrols2 qt5-svg opencode gnome-disk-utility imv mpv pavucontrol yt-dlp
     bluetui bluez bluez-utils playerctl brightnessctl lm_sensors breeze-cursors cliphist
     pipewire pipewire-pulse wireplumber power-profiles-daemon inotify-tools rsync
-    xdg-desktop-portal xdg-desktop-portal-hyprland udiskie wlr-randr bazaar grub-btrfs snapper btrfs-assistant flatpak flatpak-xdg-utils gvfs udisks2 btop xdg-user-dirs libreoffice-fresh firefox
+    xdg-desktop-portal xdg-desktop-portal-hyprland udiskie wlr-randr bazaar grub-btrfs snapper btrfs-assistant flatpak flatpak-xdg-utils gvfs udisks2 btop xdg-user-dirs libreoffice-fresh firefox cryptsetup
   )
 
   pacman -S --noconfirm --needed "${OFFICIAL[@]}" os-prober
@@ -281,6 +281,26 @@ SDDM
   grub-mkconfig -o /boot/grub/grub.cfg
   systemctl enable grub-btrfsd 2>/dev/null || true
   ok "GRUB configured"
+
+  # ── LUKS encryption (btrfs or ext4) ────────────────────────────
+  if [ "$ENCRYPTED" = "yes" ] && [ -n "$LUKS_UUID" ]; then
+    info "Configuring LUKS encryption..."
+    # GRUB: unlock encrypted disk at boot
+    sed -i 's|^#GRUB_ENABLE_CRYPTODISK=y|GRUB_ENABLE_CRYPTODISK=y|' /etc/default/grub
+    grep -q '^GRUB_ENABLE_CRYPTODISK=' /etc/default/grub || echo 'GRUB_ENABLE_CRYPTODISK=y' >> /etc/default/grub
+    # Add cryptdevice to kernel cmdline
+    local CURRENT_CMDLINE=$(grep '^GRUB_CMDLINE_LINUX_DEFAULT=' /etc/default/grub | sed 's/^GRUB_CMDLINE_LINUX_DEFAULT="//;s/"$//')
+    CURRENT_CMDLINE="$CURRENT_CMDLINE cryptdevice=UUID=$LUKS_UUID:cryptroot root=/dev/mapper/cryptroot"
+    sed -i "s|^GRUB_CMDLINE_LINUX_DEFAULT=.*|GRUB_CMDLINE_LINUX_DEFAULT=\"$CURRENT_CMDLINE\"|" /etc/default/grub
+    # crypttab
+    echo "cryptroot UUID=$LUKS_UUID none luks" > /etc/crypttab.initramfs
+    # initramfs: add encrypt hook
+    sed -i 's/^HOOKS=(.*)$/& encrypt/' /etc/mkinitcpio.conf
+    # Regenerate initramfs and GRUB
+    mkinitcpio -P 2>/dev/null || true
+    grub-mkconfig -o /boot/grub/grub.cfg
+    ok "LUKS encryption configured (crypttab + initramfs)"
+  fi
 
   # ── Firefox policies ──────────────────────────────────────────────
   info "Installing Firefox policies..."
