@@ -60,6 +60,8 @@ Requires `archiso` on an Arch Linux system. Output: `out/frenos-<YYYY.MM>-x86_64
 | `clean` | `sudo pacman -Scc` | Clear pacman cache |
 | `ff` | `fastfetch` | Quick system info |
 | `music-dl` | `yt-dlp ...` | Download audio from a URL (mp3 with metadata + thumbnail) |
+| `fren` | TUI file manager | Navigate, copy, move, rename files with vi-style keys |
+| `rmpc` | TUI music player | MPD client with album art, playlist, keybinds |
 | `update-fos` | `git pull` | Pull latest FrenOS dotfiles and configs from GitHub |
 
 ## Screenshots
