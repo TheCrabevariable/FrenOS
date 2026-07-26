@@ -66,6 +66,7 @@ ok "Mirrorlist optimized"
 
 FS_CHOICE=$(gum choose "btrfs" "ext4" --header "Filesystem")
 SWAP_CHOICE=$(gum choose "none" "4GB" "8GB" --header "Swap size")
+PARALLEL_DL=$(gum choose "1" "2" "3" "4" --header "Parallel downloads (pacman)")
 
 # ── Confirmation ──────────────────────────────────────────────
 gum confirm --affirmative "Yes, wipe it" --negative "Abort" "⚠️  THIS WILL WIPE ALL DATA ON $DISK" || err "Aborted by user"
@@ -243,6 +244,7 @@ info "Setting up auto-stage2 on first boot..."
 mkdir -p /mnt/etc/systemd/system
 
 echo "USERNAME=${USERNAME}" > /mnt/etc/arf-linux.env
+echo "PARALLEL_DL=${PARALLEL_DL}" >> /mnt/etc/arf-linux.env
 
 cat > /mnt/etc/systemd/system/arf-stage2.service <<SERVICE
 [Unit]
