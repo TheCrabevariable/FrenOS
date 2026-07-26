@@ -50,16 +50,17 @@ Requires `archiso` on an Arch Linux system. Output: `out/frenos-<YYYY.MM>-x86_64
 3. Follow prompts: keyboard layout → disk → swap (none/4GB/8GB) → WiFi (optional) → kernel → hostname/user/password/timezone → confirm wipe
 4. Reboot → SDDM → Hyprland + Quickshell bar (stage2 runs as systemd oneshot on first boot)
 
-## Updating
-
-Run `update-fos` to pull the latest FrenOS dotfiles and configs from GitHub.
-
 ## Custom Commands
 
-| Command | Description |
-|---|---|
-| `update-fos` | Pull latest FrenOS dotfiles and configs from GitHub |
-| `music-dl` | Download audio from a URL via yt-dlp (mp3 with metadata + thumbnail) |
+| Alias | Command | Description |
+|---|---|---|
+| `install` | `sudo pacman -S` | Install a package |
+| `update` | `sudo pacman -Syu` | Update all packages |
+| `remove` | `sudo pacman -Rns` | Remove a package and its unused dependencies |
+| `clean` | `sudo pacman -Scc` | Clear pacman cache |
+| `ff` | `fastfetch` | Quick system info |
+| `music-dl` | `yt-dlp ...` | Download audio from a URL (mp3 with metadata + thumbnail) |
+| `update-fos` | `git pull` | Pull latest FrenOS dotfiles and configs from GitHub |
 
 ## Screenshots
 
