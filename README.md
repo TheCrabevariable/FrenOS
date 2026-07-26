@@ -41,11 +41,11 @@ cd arf-linux-iso
 sudo ./build.sh
 ```
 
-Requires `archiso` on an Arch Linux system. Output: `out/FrenOS-<date>-x86_64.iso`.
+Requires `archiso` on an Arch Linux system. Output: `out/frenos-<YYYY.MM>-x86_64.iso`.
 
 ## Install
 
-1. Write ISO to USB: `sudo dd if=FrenOS-<date>-x86_64.iso of=/dev/sdX bs=4M status=progress && sync`
+1. Write ISO to USB: `sudo dd if=frenos-<YYYY.MM>-x86_64.iso of=/dev/sdX bs=4M status=progress && sync`
 2. Boot from USB — `arf-installer` auto-launches
 3. Follow prompts: keyboard layout → disk → swap (none/4GB/8GB) → WiFi (optional) → kernel → hostname/user/password/timezone → confirm wipe
 4. Reboot → SDDM → Hyprland + Quickshell bar (stage2 runs as systemd oneshot on first boot)
