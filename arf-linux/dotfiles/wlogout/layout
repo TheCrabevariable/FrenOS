@@ -1,6 +1,6 @@
 {
     "label" : "logout",
-    "action" : "hyprctl dispatch exit 0",
+    "action" : "/usr/bin/hyprctl dispatch exit",
     "text" : "Logout",
     "keybind" : "e"
 }
