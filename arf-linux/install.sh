@@ -306,7 +306,11 @@ SDDM
   info "Installing Firefox policies..."
   mkdir -p /usr/lib/firefox/distribution
   cp "$DOTFILES/firefox/policies.json" /usr/lib/firefox/distribution/policies.json
-  ok "Firefox policies installed (uBlock Origin + Tokyo Night V3)"
+  # Set DuckDuckGo as default search + restore previous session
+  mkdir -p "$USER_HOME/.mozilla/firefox/frenos.default"
+  cp "$DOTFILES/firefox/user.js" "$USER_HOME/.mozilla/firefox/frenos.default/user.js"
+  chown -R "$USERNAME:" "$USER_HOME/.mozilla" 2>/dev/null || true
+  ok "Firefox configured (uBlock Origin + Tokyo Night V3 + DuckDuckGo + vertical tabs + Cloudflare DNS)"
 
   # Fix any root-owned files in $USER_HOME (mkdir/cp as root in chroot)
   chown -R "$USERNAME:" "$USER_HOME" 2>/dev/null || true
