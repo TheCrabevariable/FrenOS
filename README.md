@@ -54,6 +54,13 @@ Requires `archiso` on an Arch Linux system. Output: `out/frenos-<YYYY.MM>-x86_64
 
 Run `update-fos` to pull the latest FrenOS dotfiles and configs from GitHub.
 
+## Custom Commands
+
+| Command | Description |
+|---|---|
+| `update-fos` | Pull latest FrenOS dotfiles and configs from GitHub |
+| `music-dl` | Download audio from a URL via yt-dlp (mp3 with metadata + thumbnail) |
+
 ## Screenshots
 
 ![FrenOS](arf.png)
