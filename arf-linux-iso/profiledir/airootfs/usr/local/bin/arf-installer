@@ -65,6 +65,7 @@ reflector --latest 20 --sort rate --save /etc/pacman.d/mirrorlist 2>&1 || info "
 ok "Mirrorlist optimized"
 
 FS_CHOICE=$(gum choose "btrfs" "ext4" --header "Filesystem")
+SWAP_CHOICE=$(gum choose "none" "4GB" "8GB" --header "Swap size")
 
 # ── Confirmation ──────────────────────────────────────────────
 gum confirm --affirmative "Yes, wipe it" --negative "Abort" "⚠️  THIS WILL WIPE ALL DATA ON $DISK" || err "Aborted by user"
@@ -134,6 +135,31 @@ mkdir -p /mnt/boot
 mount "$PART1" /mnt/boot
 
 ok "Partitions created and mounted"
+
+# ── Swap ───────────────────────────────────────────────────
+if [ "$SWAP_CHOICE" != "none" ]; then
+  info "Creating ${SWAP_CHOICE} swapfile..."
+  if [ "$FS_CHOICE" = "btrfs" ]; then
+    # Btrfs swapfile needs special handling
+    btrfs subvolume create /mnt/@swap 2>/dev/null || true
+    btrfs property set /mnt/@swap compression none 2>/dev/null || true
+    umount /mnt/@swap 2>/dev/null || true
+    mkdir -p /mnt/swap
+    mount -o subvol=@swap "$PART2" /mnt/swap
+    fallocate -l "$SWAP_CHOICE" /mnt/swap/swapfile
+    chmod 600 /mnt/swap/swapfile
+    mkswap /mnt/swap/swapfile
+    swapon /mnt/swap/swapfile
+    echo "/swap/swapfile none swap sw 0 0" >> /mnt/etc/fstab
+  else
+    fallocate -l "$SWAP_CHOICE" /mnt/swapfile
+    chmod 600 /mnt/swapfile
+    mkswap /mnt/swapfile
+    swapon /mnt/swapfile
+    echo "/swapfile none swap sw 0 0" >> /mnt/etc/fstab
+  fi
+  ok "Swap created: ${SWAP_CHOICE}"
+fi
 
 # Write keyboard layout to installed system
 mkdir -p /mnt/etc
