@@ -141,7 +141,6 @@ ok "Partitions created and mounted"
 if [ "$SWAP_CHOICE" != "none" ]; then
   info "Creating ${SWAP_CHOICE} swapfile..."
   if [ "$FS_CHOICE" = "btrfs" ]; then
-    # Btrfs swapfile needs special handling
     btrfs subvolume create /mnt/@swap 2>/dev/null || true
     btrfs property set /mnt/@swap compression none 2>/dev/null || true
     umount /mnt/@swap 2>/dev/null || true
@@ -151,13 +150,13 @@ if [ "$SWAP_CHOICE" != "none" ]; then
     chmod 600 /mnt/swap/swapfile
     mkswap /mnt/swap/swapfile
     swapon /mnt/swap/swapfile
-    echo "/swap/swapfile none swap sw 0 0" >> /mnt/etc/fstab
+    SWAP_FSTAB="/swap/swapfile none swap sw 0 0"
   else
     fallocate -l "$SWAP_CHOICE" /mnt/swapfile
     chmod 600 /mnt/swapfile
     mkswap /mnt/swapfile
     swapon /mnt/swapfile
-    echo "/swapfile none swap sw 0 0" >> /mnt/etc/fstab
+    SWAP_FSTAB="/swapfile none swap sw 0 0"
   fi
   ok "Swap created: ${SWAP_CHOICE}"
 fi
@@ -193,6 +192,11 @@ ok "Base system installed"
 info "Configuring installed system..."
 
 genfstab -U /mnt >> /mnt/etc/fstab
+
+# Append swap to fstab (after genfstab creates it)
+if [ -n "${SWAP_FSTAB:-}" ]; then
+  echo "$SWAP_FSTAB" >> /mnt/etc/fstab
+fi
 
 arch-chroot /mnt ln -sf "/usr/share/zoneinfo/$TIMEZONE" /etc/localtime
 arch-chroot /mnt hwclock --systohc
