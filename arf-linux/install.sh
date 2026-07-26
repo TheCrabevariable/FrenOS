@@ -101,7 +101,7 @@ stage2() {
     quickshell ttf-hack-nerd ttf-nerd-fonts-symbols noto-fonts-emoji sddm qt5-graphicaleffects qt5-quickcontrols2 qt5-svg opencode gnome-disk-utility imv mpv pavucontrol yt-dlp
     bluetui bluez bluez-utils playerctl brightnessctl lm_sensors breeze-cursors cliphist
     pipewire pipewire-pulse wireplumber power-profiles-daemon inotify-tools rsync
-    xdg-desktop-portal xdg-desktop-portal-hyprland udiskie wlr-randr bazaar grub-btrfs flatpak flatpak-xdg-utils gvfs udisks2 btop xdg-user-dirs libreoffice-fresh firefox
+    xdg-desktop-portal xdg-desktop-portal-hyprland udiskie wlr-randr bazaar grub-btrfs snapper btrfs-assistant flatpak flatpak-xdg-utils gvfs udisks2 btop xdg-user-dirs libreoffice-fresh firefox
   )
 
   pacman -S --noconfirm --needed "${OFFICIAL[@]}" os-prober
@@ -290,6 +290,22 @@ SDDM
 
   # Fix any root-owned files in $USER_HOME (mkdir/cp as root in chroot)
   chown -R "$USERNAME:" "$USER_HOME" 2>/dev/null || true
+
+  # ── Snapper + initial snapshot (btrfs only) ──────────────────────
+  if [ "$FS_CHOICE" = "btrfs" ]; then
+    info "Configuring snapper for btrfs..."
+    SNAPPER_CFGS=(root home)
+    for cfg in "${SNAPPER_CFGS[@]}"; do
+      snapper --no-dbus -c "$cfg" create-config / 2>/dev/null || true
+    done
+    # Configure root snapshot: keep 5 hourly, 3 daily, 2 weekly
+    snapper --no-dbus -c root set-config "TIMELINE_CREATE=yes" "TIMELINE_LIMIT_HOURLY=5" "TIMELINE_LIMIT_DAILY=3" "TIMELINE_LIMIT_WEEKLY=2" 2>/dev/null || true
+    # Take initial "clean install" snapshot
+    snapper --no-dbus -c root create -d "Clean install" --print-number 2>/dev/null || true
+    systemctl enable --now snapper-timeline.timer 2>/dev/null || true
+    systemctl enable --now snapper-cleanup.timer 2>/dev/null || true
+    ok "Snapper configured, initial snapshot created"
+  fi
 
   ok "Stage 2 complete!"
 
