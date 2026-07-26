@@ -180,6 +180,9 @@ KERNEL=$(gum choose --header "Choose kernel" "linux" "linux-zen")
 # ── Install base system ───────────────────────────────────────
 info "Installing base system via pacstrap..."
 
+# Set parallel downloads on live system for pacstrap
+sed -i "s/^#ParallelDownloads = 5/ParallelDownloads = ${PARALLEL_DL}/" /etc/pacman.conf 2>/dev/null || true
+
 PACSTRAP_PKGS=(
   base "$KERNEL" linux-firmware
   base-devel
