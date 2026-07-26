@@ -1,0 +1,36 @@
+name: Build FrenOS ISO
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    container:
+      image: archlinux:latest
+      options: --privileged
+    steps:
+      - name: Install dependencies
+        run: |
+          pacman -Syu --noconfirm
+          pacman -S --noconfirm archiso git
+
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Build ISO
+        run: |
+          cd arf-linux-iso
+          # Remove sudo calls since we're already root in container
+          sed -i 's/sudo //g' build.sh
+          ./build.sh
+
+      - name: Upload ISO
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: FrenOS-${{ github.sha }}
+          path: arf-linux-iso/out/*.iso
+          retention-days: 30
