@@ -97,7 +97,7 @@ stage2() {
   # Official packages
   OFFICIAL=(
     hyprland hypridle hyprlock hyprpaper hyprshot hyprpolkitagent hyprpicker
-    zed steam kitty fastfetch chafa imagemagick rmpc mpd mpd-mpris networkmanager zsh python
+    zed steam kitty fastfetch chafa imagemagick rmpc mpd mpd-mpris networkmanager zsh python nano
     quickshell ttf-hack-nerd ttf-nerd-fonts-symbols noto-fonts-emoji sddm qt5-graphicaleffects qt5-quickcontrols2 qt5-svg opencode gnome-disk-utility imv mpv pavucontrol yt-dlp
     bluetui bluez bluez-utils playerctl brightnessctl lm_sensors breeze-cursors cliphist
     pipewire pipewire-pulse wireplumber power-profiles-daemon inotify-tools rsync
