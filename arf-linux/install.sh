@@ -331,6 +331,7 @@ SDDM
     snapper --no-dbus -c root create -d "Clean install" --print-number 2>/dev/null || true
     systemctl enable --now snapper-timeline.timer 2>/dev/null || true
     systemctl enable --now snapper-cleanup.timer 2>/dev/null || true
+    systemctl enable snapper-boot.service 2>/dev/null || true
     # Regenerate GRUB so grub-btrfs picks up the snapshot
     grub-mkconfig -o /boot/grub/grub.cfg 2>/dev/null || true
     ok "Snapper configured, initial snapshot created"

@@ -323,6 +323,7 @@ fi
 # ── Enable fstrim if SSD ──────────────────────────────────────
 if [ "$IS_SSD" = true ]; then
   info "Enabling fstrim.timer (SSD detected)"
+  mkdir -p /mnt/etc/systemd/system/timers.target.wants
   ln -sf /usr/lib/systemd/system/fstrim.timer /mnt/etc/systemd/system/timers.target.wants/fstrim.timer 2>/dev/null || true
 fi
 
