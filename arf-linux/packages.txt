@@ -21,7 +21,12 @@ python
 nano
 quickshell
 ttf-hack-nerd
+ttf-nerd-fonts-symbols
+noto-fonts-emoji
 sddm
+qt5-graphicaleffects
+qt5-quickcontrols2
+qt5-svg
 opencode
 gnome-disk-utility
 imv
@@ -32,14 +37,17 @@ bluetui
 bluez
 bluez-utils
 playerctl
-btop
 brightnessctl
 lm_sensors
+breeze-cursors
+cliphist
 pipewire
 pipewire-pulse
 wireplumber
 power-profiles-daemon
 inotify-tools
+rsync
+cryptsetup
 xdg-desktop-portal
 xdg-desktop-portal-hyprland
 gvfs
@@ -54,10 +62,9 @@ btrfs-assistant
 libreoffice-fresh
 vesktop
 firefox
-cliphist
-xdg-user-dirs
 flatpak
 flatpak-xdg-utils
+xdg-user-dirs
 
 # AUR packages
 animu-bin

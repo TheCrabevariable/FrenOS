@@ -83,8 +83,10 @@ if [ "$ENCRYPT_CHOICE" = "yes" ]; then
   while true; do
     LUKS_PASS=$(gum input --password --placeholder "LUKS passphrase")
     LUKS_PASS2=$(gum input --password --placeholder "Confirm passphrase")
-    [ "$LUKS_PASS" = "$LUKS_PASS2" ] && [ -n "$LUKS_PASS" ] && break
-    err "Passphrases don't match or empty. Try again."
+    if [ "$LUKS_PASS" = "$LUKS_PASS2" ] && [ -n "$LUKS_PASS" ]; then
+      break
+    fi
+    gum style "Passphrases don't match or empty. Try again." --foreground yellow >&2
   done
   info "Root partition will be encrypted with LUKS"
 fi
@@ -178,9 +180,10 @@ if [ "$SWAP_CHOICE" != "none" ]; then
   if [ "$FS_CHOICE" = "btrfs" ]; then
     btrfs subvolume create /mnt/@swap 2>/dev/null || true
     btrfs property set /mnt/@swap compression none 2>/dev/null || true
+    btrfs property set /mnt/@swap cow false 2>/dev/null || true
     mkdir -p /mnt/swap
     mount -o subvol=@swap "$ROOT_DEV" /mnt/swap
-    fallocate -l "$SWAP_CHOICE" /mnt/swap/swapfile
+    dd if=/dev/zero of=/mnt/swap/swapfile bs=1M count=$(( ${SWAP_CHOICE%GB} * 1024 )) status=progress
     chmod 600 /mnt/swap/swapfile
     mkswap /mnt/swap/swapfile
     swapon /mnt/swap/swapfile
@@ -317,18 +320,6 @@ if [ -d /usr/share/sddm/themes/sddm-flower-theme ]; then
   ok "Bundled SDDM theme copied to installed system"
 fi
 
-# ── Configure snapper snapshots ───────────────────────────────
-if [ -n "${SNAPPER_PKG:-}" ]; then
-  info "Configuring snapper snapshots..."
-  arch-chroot /mnt bash -c "
-    snapper -c root create-config /
-    snapper -c home create-config /home
-    systemctl enable snapper-timeline.timer snapper-cleanup.timer
-    systemctl enable snapper-boot.service
-  " 2>&1 || true
-  ok "Snapper configured for @ (/) and @home"
-fi
-
 # ── Enable fstrim if SSD ──────────────────────────────────────
 if [ "$IS_SSD" = true ]; then
   info "Enabling fstrim.timer (SSD detected)"
@@ -339,12 +330,15 @@ fi
 info "Running stage2 in chroot..."
 cp /etc/resolv.conf /mnt/etc/resolv.conf 2>/dev/null || true
 if arch-chroot /mnt bash -c "
-  export USERNAME=$USERNAME HOME=/home/$USERNAME PARALLEL_DL=$PARALLEL_DL
+  export USERNAME=$USERNAME HOME=/home/$USERNAME PARALLEL_DL=$PARALLEL_DL FS_CHOICE=$FS_CHOICE ENCRYPTED=$ENCRYPT_CHOICE LUKS_UUID=$LUKS_UUID
   bash /home/$USERNAME/arf-linux/install.sh --stage2
-  # Disable the first-boot service since we ran successfully in chroot
-  rm -f /etc/systemd/system/multi-user.target.wants/arf-stage2.service
-  rm -f /etc/systemd/system/arf-stage2.service
-  rm -f /etc/arf-linux.env
+  STAGE2_EXIT=\$?
+  if [ \$STAGE2_EXIT -eq 0 ]; then
+    rm -f /etc/systemd/system/multi-user.target.wants/arf-stage2.service
+    rm -f /etc/systemd/system/arf-stage2.service
+    rm -f /etc/arf-linux.env
+  fi
+  exit \$STAGE2_EXIT
 " 2>&1; then
   ok "Stage2 complete"
 else

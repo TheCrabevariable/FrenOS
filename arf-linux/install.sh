@@ -295,8 +295,8 @@ SDDM
     sed -i "s|^GRUB_CMDLINE_LINUX_DEFAULT=.*|GRUB_CMDLINE_LINUX_DEFAULT=\"$CURRENT_CMDLINE\"|" /etc/default/grub
     # crypttab
     echo "cryptroot UUID=$LUKS_UUID none luks" > /etc/crypttab.initramfs
-    # initramfs: add encrypt hook BEFORE filesystems
-    sed -i 's/\(HOOKS=(.*\) filesystems/\1 encrypt filesystems/' /etc/mkinitcpio.conf
+    # initramfs: add encrypt + keymap hooks BEFORE filesystems
+    sed -i 's/\(HOOKS=(.*\) filesystems/\1 encrypt keymap filesystems/' /etc/mkinitcpio.conf
     # Regenerate initramfs and GRUB
     mkinitcpio -P 2>/dev/null || true
     grub-mkconfig -o /boot/grub/grub.cfg
