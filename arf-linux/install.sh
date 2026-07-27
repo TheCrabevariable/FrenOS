@@ -280,6 +280,7 @@ SDDM
   ok "GRUB configured"
 
   # ── LUKS encryption (btrfs or ext4) ────────────────────────────
+  info "ENCRYPTED=$ENCRYPTED LUKS_UUID=${LUKS_UUID:-unset}"
   if [ "$ENCRYPTED" = "yes" ] && [ -n "$LUKS_UUID" ]; then
     info "Configuring LUKS encryption..."
     # GRUB: unlock encrypted disk at boot
@@ -292,12 +293,19 @@ SDDM
     # crypttab
     echo "cryptroot UUID=$LUKS_UUID none luks" > /etc/crypttab.initramfs
     # initramfs: add encrypt + keymap hooks BEFORE filesystems
-    sed -i 's/\(HOOKS=(.*\) filesystems/\1 encrypt keymap filesystems/' /etc/mkinitcpio.conf
+    if grep -q 'encrypt' /etc/mkinitcpio.conf; then
+      info "encrypt hook already present in mkinitcpio.conf"
+    else
+      sed -i '/^HOOKS=/s/ filesystems/ encrypt keymap filesystems/' /etc/mkinitcpio.conf
+      info "Added encrypt+keymap hooks to mkinitcpio.conf"
+    fi
+    info "HOOKS line: $(grep '^HOOKS=' /etc/mkinitcpio.conf)"
     # Regenerate initramfs and GRUB
-    mkinitcpio -P 2>/dev/null || true
-    grub-mkconfig -o /boot/grub/grub.cfg
+    mkinitcpio -P 2>&1 | tail -5 || true
+    grub-mkconfig -o /boot/grub/grub.cfg 2>&1 | tail -5 || true
     ok "LUKS encryption configured (crypttab + initramfs)"
   else
+    info "LUKS not enabled, skipping encryption config"
     # Regenerate initramfs for GPU drivers (non-encrypted)
     mkinitcpio -P 2>/dev/null || true
   fi
