@@ -44,7 +44,8 @@ stage2() {
 
   # Tweak pacman.conf
   local PARALLEL="${PARALLEL_DL:-1}"
-  sed -i "s/^#Color/Color/; s|^#ParallelDownloads = 5|ParallelDownloads = ${PARALLEL}|" /etc/pacman.conf
+  sed -i "s/^#Color/Color/" /etc/pacman.conf
+  sed -i "s/^#\?ParallelDownloads = .*/ParallelDownloads = ${PARALLEL}/" /etc/pacman.conf
   grep -q '^ILoveCandy' /etc/pacman.conf || sed -i '/^Color/a ILoveCandy' /etc/pacman.conf
   grep -q '^VerbosePkgLists' /etc/pacman.conf || sed -i '/^Color/a VerbosePkgLists' /etc/pacman.conf
 
@@ -139,8 +140,8 @@ stage2() {
 
   rm -f /etc/sudoers.d/99-arf
 
-  # Regenerate initramfs now that GPU drivers are installed
-  mkinitcpio -P
+  # Regenerate initramfs after GPU drivers + LUKS (done later in stage2)
+  # mkinitcpio -P is called after LUKS config below
 
   # Enable services
   systemctl enable sddm
@@ -294,12 +295,15 @@ SDDM
     sed -i "s|^GRUB_CMDLINE_LINUX_DEFAULT=.*|GRUB_CMDLINE_LINUX_DEFAULT=\"$CURRENT_CMDLINE\"|" /etc/default/grub
     # crypttab
     echo "cryptroot UUID=$LUKS_UUID none luks" > /etc/crypttab.initramfs
-    # initramfs: add encrypt hook
-    sed -i 's/^HOOKS=(.*)$/& encrypt/' /etc/mkinitcpio.conf
+    # initramfs: add encrypt + keymap hooks BEFORE filesystems
+    sed -i 's/\(HOOKS=(.*\) filesystems/\1 encrypt keymap filesystems/' /etc/mkinitcpio.conf
     # Regenerate initramfs and GRUB
     mkinitcpio -P 2>/dev/null || true
     grub-mkconfig -o /boot/grub/grub.cfg
     ok "LUKS encryption configured (crypttab + initramfs)"
+  else
+    # Regenerate initramfs for GPU drivers (non-encrypted)
+    mkinitcpio -P 2>/dev/null || true
   fi
 
   # ── Firefox policies ──────────────────────────────────────────────
@@ -318,16 +322,18 @@ SDDM
   # ── Snapper + initial snapshot (btrfs only) ──────────────────────
   if [ "$FS_CHOICE" = "btrfs" ]; then
     info "Configuring snapper for btrfs..."
-    SNAPPER_CFGS=(root home)
-    for cfg in "${SNAPPER_CFGS[@]}"; do
-      snapper --no-dbus -c "$cfg" create-config / 2>/dev/null || true
-    done
+    # Remove existing @snapshots dir if snapper create-config needs to create it
+    # The @snapshots subvolume is already mounted at /.snapshots
+    snapper --no-dbus -c root create-config / 2>/dev/null || true
     # Configure root snapshot: keep 5 hourly, 3 daily, 2 weekly
     snapper --no-dbus -c root set-config "TIMELINE_CREATE=yes" "TIMELINE_LIMIT_HOURLY=5" "TIMELINE_LIMIT_DAILY=3" "TIMELINE_LIMIT_WEEKLY=2" 2>/dev/null || true
     # Take initial "clean install" snapshot
     snapper --no-dbus -c root create -d "Clean install" --print-number 2>/dev/null || true
     systemctl enable --now snapper-timeline.timer 2>/dev/null || true
     systemctl enable --now snapper-cleanup.timer 2>/dev/null || true
+    systemctl enable snapper-boot.service 2>/dev/null || true
+    # Regenerate GRUB so grub-btrfs picks up the snapshot
+    grub-mkconfig -o /boot/grub/grub.cfg 2>/dev/null || true
     ok "Snapper configured, initial snapshot created"
   fi
 

@@ -57,8 +57,6 @@ wlr-randr
 os-prober
 bazaar
 grub-btrfs
-snapper
-btrfs-assistant
 libreoffice-fresh
 vesktop
 firefox

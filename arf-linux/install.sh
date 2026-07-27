@@ -102,7 +102,7 @@ stage2() {
     quickshell ttf-hack-nerd ttf-nerd-fonts-symbols noto-fonts-emoji sddm qt5-graphicaleffects qt5-quickcontrols2 qt5-svg opencode gnome-disk-utility imv mpv pavucontrol yt-dlp
     bluetui bluez bluez-utils playerctl brightnessctl lm_sensors breeze-cursors cliphist
     pipewire pipewire-pulse wireplumber power-profiles-daemon inotify-tools rsync
-    xdg-desktop-portal xdg-desktop-portal-hyprland udiskie wlr-randr bazaar grub-btrfs snapper btrfs-assistant flatpak flatpak-xdg-utils gvfs udisks2 btop xdg-user-dirs libreoffice-fresh firefox cryptsetup
+    xdg-desktop-portal xdg-desktop-portal-hyprland udiskie wlr-randr bazaar grub-btrfs flatpak flatpak-xdg-utils gvfs udisks2 btop xdg-user-dirs libreoffice-fresh firefox cryptsetup
   )
 
   pacman -S --noconfirm --needed "${OFFICIAL[@]}" os-prober
@@ -315,6 +315,8 @@ SDDM
 
   # ── Snapper + initial snapshot (btrfs only) ──────────────────────
   if [ "$FS_CHOICE" = "btrfs" ]; then
+    info "Installing snapper + btrfs-assistant..."
+    pacman -S --noconfirm --needed snapper btrfs-assistant 2>/dev/null || true
     info "Configuring snapper for btrfs..."
     # Remove existing @snapshots dir if snapper create-config needs to create it
     # The @snapshots subvolume is already mounted at /.snapshots
