@@ -178,7 +178,6 @@ if [ "$SWAP_CHOICE" != "none" ]; then
   if [ "$FS_CHOICE" = "btrfs" ]; then
     btrfs subvolume create /mnt/@swap 2>/dev/null || true
     btrfs property set /mnt/@swap compression none 2>/dev/null || true
-    umount /mnt/@swap 2>/dev/null || true
     mkdir -p /mnt/swap
     mount -o subvol=@swap "$ROOT_DEV" /mnt/swap
     fallocate -l "$SWAP_CHOICE" /mnt/swap/swapfile
