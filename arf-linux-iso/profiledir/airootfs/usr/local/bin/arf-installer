@@ -148,6 +148,11 @@ if [ "$FS_CHOICE" = "btrfs" ]; then
     btrfs subvolume create /mnt/@
     btrfs subvolume create /mnt/@home
     btrfs subvolume create /mnt/@snapshots
+    if [ "$SWAP_CHOICE" != "none" ]; then
+      btrfs subvolume create /mnt/@swap
+      btrfs property set /mnt/@swap compression none
+      btrfs property set /mnt/@swap cow false
+    fi
     umount /mnt
     mount -o subvol=@,compress=zstd "$ROOT_DEV" /mnt
     mkdir -p /mnt/{home,.snapshots}
@@ -178,9 +183,6 @@ ok "Partitions created and mounted"
 if [ "$SWAP_CHOICE" != "none" ]; then
   info "Creating ${SWAP_CHOICE} swapfile..."
   if [ "$FS_CHOICE" = "btrfs" ]; then
-    btrfs subvolume create /mnt/@swap 2>/dev/null || true
-    btrfs property set /mnt/@swap compression none 2>/dev/null || true
-    btrfs property set /mnt/@swap cow false 2>/dev/null || true
     mkdir -p /mnt/swap
     mount -o subvol=@swap "$ROOT_DEV" /mnt/swap
     dd if=/dev/zero of=/mnt/swap/swapfile bs=1M count=$(( ${SWAP_CHOICE%GB} * 1024 )) status=progress
