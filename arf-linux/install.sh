@@ -140,8 +140,8 @@ stage2() {
 
   rm -f /etc/sudoers.d/99-arf
 
-  # Regenerate initramfs now that GPU drivers are installed
-  mkinitcpio -P
+  # Regenerate initramfs after GPU drivers + LUKS (done later in stage2)
+  # mkinitcpio -P is called after LUKS config below
 
   # Enable services
   systemctl enable sddm
@@ -295,12 +295,15 @@ SDDM
     sed -i "s|^GRUB_CMDLINE_LINUX_DEFAULT=.*|GRUB_CMDLINE_LINUX_DEFAULT=\"$CURRENT_CMDLINE\"|" /etc/default/grub
     # crypttab
     echo "cryptroot UUID=$LUKS_UUID none luks" > /etc/crypttab.initramfs
-    # initramfs: add encrypt hook
-    sed -i 's/^HOOKS=(.*)$/& encrypt/' /etc/mkinitcpio.conf
+    # initramfs: add encrypt hook BEFORE filesystems
+    sed -i 's/\(HOOKS=(.*\) filesystems/\1 encrypt filesystems/' /etc/mkinitcpio.conf
     # Regenerate initramfs and GRUB
     mkinitcpio -P 2>/dev/null || true
     grub-mkconfig -o /boot/grub/grub.cfg
     ok "LUKS encryption configured (crypttab + initramfs)"
+  else
+    # Regenerate initramfs for GPU drivers (non-encrypted)
+    mkinitcpio -P 2>/dev/null || true
   fi
 
   # ── Firefox policies ──────────────────────────────────────────────

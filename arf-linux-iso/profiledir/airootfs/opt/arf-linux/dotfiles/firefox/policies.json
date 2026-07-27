@@ -1,5 +1,17 @@
 {
   "policies": {
+    "DnsOverHttps": {
+      "Enabled": true,
+      "ProviderURL": "https://mozilla.cloudflare-dns.com/dns-query",
+      "Locked": false
+    },
+    "DisableTelemetry": true,
+    "DisableFirefoxStudies": true,
+    "NoDefaultBookmarks": true,
+    "OfferToSaveLogins": false,
+    "PasswordManagerEnabled": false,
+    "RestoreOnStartup": 3,
+    "SearchSuggestEnabled": true,
     "ExtensionSettings": {
       "uBlock0@raymondhill.net": {
         "installation_mode": "force_installed",
@@ -8,6 +20,10 @@
       "{6c8ef7a0-0691-4323-8bdc-af24f54985ec}": {
         "installation_mode": "force_installed",
         "install_url": "https://addons.mozilla.org/firefox/downloads/latest/tokyo-night-v3/latest.xpi"
+      },
+      "treestyletab@piro.sakura.ne.jp": {
+        "installation_mode": "force_installed",
+        "install_url": "https://addons.mozilla.org/firefox/downloads/latest/tree-style-tab/latest.xpi"
       }
     }
   }
