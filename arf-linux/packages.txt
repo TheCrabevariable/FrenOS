@@ -56,7 +56,6 @@ udiskie
 wlr-randr
 os-prober
 bazaar
-grub-btrfs
 libreoffice-fresh
 vesktop
 firefox

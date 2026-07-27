@@ -102,7 +102,7 @@ stage2() {
     quickshell ttf-hack-nerd ttf-nerd-fonts-symbols noto-fonts-emoji sddm qt5-graphicaleffects qt5-quickcontrols2 qt5-svg opencode gnome-disk-utility imv mpv pavucontrol yt-dlp
     bluetui bluez bluez-utils playerctl brightnessctl lm_sensors breeze-cursors cliphist
     pipewire pipewire-pulse wireplumber power-profiles-daemon inotify-tools rsync
-    xdg-desktop-portal xdg-desktop-portal-hyprland udiskie wlr-randr bazaar grub-btrfs flatpak flatpak-xdg-utils gvfs udisks2 btop xdg-user-dirs libreoffice-fresh firefox cryptsetup
+    xdg-desktop-portal xdg-desktop-portal-hyprland udiskie wlr-randr bazaar flatpak flatpak-xdg-utils gvfs udisks2 btop xdg-user-dirs libreoffice-fresh firefox cryptsetup
   )
 
   pacman -S --noconfirm --needed "${OFFICIAL[@]}" os-prober
@@ -274,7 +274,9 @@ SDDM
   sed -i "s|^GRUB_CMDLINE_LINUX_DEFAULT=\".*\"|GRUB_CMDLINE_LINUX_DEFAULT=\"$CMDLINE\"|" /etc/default/grub
   sed -i 's|^#GRUB_DISABLE_OS_PROBER=false|GRUB_DISABLE_OS_PROBER=false|' /etc/default/grub || true
   grub-mkconfig -o /boot/grub/grub.cfg
-  systemctl enable grub-btrfsd 2>/dev/null || true
+  if [ "$FS_CHOICE" = "btrfs" ]; then
+    systemctl enable grub-btrfsd 2>/dev/null || true
+  fi
   ok "GRUB configured"
 
   # ── LUKS encryption (btrfs or ext4) ────────────────────────────
@@ -315,8 +317,8 @@ SDDM
 
   # ── Snapper + initial snapshot (btrfs only) ──────────────────────
   if [ "$FS_CHOICE" = "btrfs" ]; then
-    info "Installing snapper + btrfs-assistant..."
-    pacman -S --noconfirm --needed snapper btrfs-assistant 2>/dev/null || true
+    info "Installing btrfs packages (grub-btrfs, snapper, btrfs-assistant)..."
+    pacman -S --noconfirm --needed grub-btrfs snapper btrfs-assistant 2>/dev/null || true
     info "Configuring snapper for btrfs..."
     # Remove existing @snapshots dir if snapper create-config needs to create it
     # The @snapshots subvolume is already mounted at /.snapshots
