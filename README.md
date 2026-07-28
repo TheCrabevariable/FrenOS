@@ -2,6 +2,10 @@
 
 Arch Linux automated installer ISO with Hyprland, Quickshell Tokyo Night bar, and single-reboot post-install configuration.
 
+Right now only ext4 without swap and luks work
+
+i am working to make everything good
+
 ## Features
 
 - **Automated install** — interactive stage1 with keyboard layout, disk selection, swap size, kernel choice, user setup, timezone
