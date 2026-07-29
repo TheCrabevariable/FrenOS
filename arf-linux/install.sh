@@ -344,15 +344,6 @@ SDDM
   fi
 
   ok "Stage 2 complete!"
-
-  # If running via the ISO automated flow, reboot automatically
-  if [ -f /etc/arf-linux.env ]; then
-    info "Rebooting in 5 seconds..."
-    sleep 5
-    systemctl reboot
-  else
-    echo "  Reboot to start SDDM and enjoy FrenOS!"
-  fi
 }
 
 # ── Main ───────────────────────────────────────────────────────

@@ -358,6 +358,16 @@ else
 fi
 
 # ── Done ──────────────────────────────────────────────────────
-ok "Installation complete! Rebooting in 5 seconds..."
-sleep 5
-reboot
+ok "Installation complete!"
+echo ""
+if gum confirm "Enter chroot to inspect the install before reboot?" --default=true; then
+  info "Entering chroot. Type 'exit' to return."
+  arch-chroot /mnt
+  info "Rebooting..."
+  sleep 2
+  reboot
+else
+  info "Rebooting in 5 seconds..."
+  sleep 5
+  reboot
+fi

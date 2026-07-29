@@ -102,7 +102,7 @@ stage2() {
     quickshell ttf-hack-nerd ttf-nerd-fonts-symbols noto-fonts-emoji sddm qt5-graphicaleffects qt5-quickcontrols2 qt5-svg opencode gnome-disk-utility imv mpv pavucontrol yt-dlp
     bluetui bluez bluez-utils playerctl brightnessctl lm_sensors breeze-cursors cliphist
     pipewire pipewire-pulse wireplumber power-profiles-daemon inotify-tools rsync
-    xdg-desktop-portal xdg-desktop-portal-hyprland udiskie wlr-randr bazaar grub-btrfs snapper btrfs-assistant flatpak flatpak-xdg-utils gvfs udisks2 btop xdg-user-dirs libreoffice-fresh firefox cryptsetup
+    xdg-desktop-portal xdg-desktop-portal-hyprland udiskie wlr-randr bazaar flatpak flatpak-xdg-utils gvfs udisks2 btop xdg-user-dirs libreoffice-fresh firefox cryptsetup
   )
 
   pacman -S --noconfirm --needed "${OFFICIAL[@]}" os-prober
@@ -189,14 +189,8 @@ stage2() {
 
   mkdir -p "$USER_HOME/.config/mpd/playlists"
   mkdir -p "$USER_HOME/Music"
-  touch "$USER_HOME/.config/mpd/database"
   chown -R "$USERNAME:" "$USER_HOME/.config/mpd" 2>/dev/null || true
   chown -R "$USERNAME:" "$USER_HOME/Music" 2>/dev/null || true
-
-  # Initialize mpd database
-  sudo -u "$USERNAME" bash -c "XDG_RUNTIME_DIR=/run/user/$(id -u "$USERNAME") systemctl --user start mpd 2>/dev/null" || true
-  sleep 2
-  sudo -u "$USERNAME" bash -c "XDG_RUNTIME_DIR=/run/user/$(id -u "$USERNAME") mpc update 2>/dev/null" || true
 
   # Install update-fos script
   if [ -f "$DOTFILES/frenos/update-fos" ]; then
@@ -280,10 +274,13 @@ SDDM
   sed -i "s|^GRUB_CMDLINE_LINUX_DEFAULT=\".*\"|GRUB_CMDLINE_LINUX_DEFAULT=\"$CMDLINE\"|" /etc/default/grub
   sed -i 's|^#GRUB_DISABLE_OS_PROBER=false|GRUB_DISABLE_OS_PROBER=false|' /etc/default/grub || true
   grub-mkconfig -o /boot/grub/grub.cfg
-  systemctl enable grub-btrfsd 2>/dev/null || true
+  if [ "$FS_CHOICE" = "btrfs" ]; then
+    systemctl enable grub-btrfsd 2>/dev/null || true
+  fi
   ok "GRUB configured"
 
   # ── LUKS encryption (btrfs or ext4) ────────────────────────────
+  info "ENCRYPTED=$ENCRYPTED LUKS_UUID=${LUKS_UUID:-unset}"
   if [ "$ENCRYPTED" = "yes" ] && [ -n "$LUKS_UUID" ]; then
     info "Configuring LUKS encryption..."
     # GRUB: unlock encrypted disk at boot
@@ -296,12 +293,19 @@ SDDM
     # crypttab
     echo "cryptroot UUID=$LUKS_UUID none luks" > /etc/crypttab.initramfs
     # initramfs: add encrypt + keymap hooks BEFORE filesystems
-    sed -i 's/\(HOOKS=(.*\) filesystems/\1 encrypt keymap filesystems/' /etc/mkinitcpio.conf
+    if grep -q 'encrypt' /etc/mkinitcpio.conf; then
+      info "encrypt hook already present in mkinitcpio.conf"
+    else
+      sed -i '/^HOOKS=/s/ filesystems/ encrypt keymap filesystems/' /etc/mkinitcpio.conf
+      info "Added encrypt+keymap hooks to mkinitcpio.conf"
+    fi
+    info "HOOKS line: $(grep '^HOOKS=' /etc/mkinitcpio.conf)"
     # Regenerate initramfs and GRUB
-    mkinitcpio -P 2>/dev/null || true
-    grub-mkconfig -o /boot/grub/grub.cfg
+    mkinitcpio -P 2>&1 | tail -5 || true
+    grub-mkconfig -o /boot/grub/grub.cfg 2>&1 | tail -5 || true
     ok "LUKS encryption configured (crypttab + initramfs)"
   else
+    info "LUKS not enabled, skipping encryption config"
     # Regenerate initramfs for GPU drivers (non-encrypted)
     mkinitcpio -P 2>/dev/null || true
   fi
@@ -321,6 +325,8 @@ SDDM
 
   # ── Snapper + initial snapshot (btrfs only) ──────────────────────
   if [ "$FS_CHOICE" = "btrfs" ]; then
+    info "Installing btrfs packages (grub-btrfs, snapper, btrfs-assistant)..."
+    pacman -S --noconfirm --needed grub-btrfs snapper btrfs-assistant 2>/dev/null || true
     info "Configuring snapper for btrfs..."
     # Remove existing @snapshots dir if snapper create-config needs to create it
     # The @snapshots subvolume is already mounted at /.snapshots
