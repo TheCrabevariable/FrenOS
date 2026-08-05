@@ -275,14 +275,23 @@ if [ "$ENCRYPT_CHOICE" = "yes" ] && [ -n "$LUKS_UUID" ]; then
   info "Configuring LUKS in installed system..."
   arch-chroot /mnt sed -i 's|^#GRUB_ENABLE_CRYPTODISK=y|GRUB_ENABLE_CRYPTODISK=y|' /etc/default/grub
   arch-chroot /mnt sh -c "grep -q '^GRUB_ENABLE_CRYPTODISK=' /etc/default/grub || echo 'GRUB_ENABLE_CRYPTODISK=y' >> /etc/default/grub"
-  CMDLINE="quiet cryptdevice=UUID=$LUKS_UUID:cryptroot root=/dev/mapper/cryptroot"
+  # systemd-based initramfs (base systemd) uses sd-encrypt + rd.luks.name
+  if arch-chroot /mnt sh -c "grep -q '^HOOKS=.*systemd' /etc/mkinitcpio.conf"; then
+    ENCRYPT_HOOK=sd-encrypt
+    CMDLINE="quiet rd.luks.name=$LUKS_UUID=cryptroot root=/dev/mapper/cryptroot"
+    info "systemd initramfs detected, using sd-encrypt hook"
+  else
+    ENCRYPT_HOOK="encrypt keymap"
+    CMDLINE="quiet cryptdevice=UUID=$LUKS_UUID:cryptroot root=/dev/mapper/cryptroot"
+    info "udev initramfs detected, using encrypt+keymap hooks"
+  fi
   arch-chroot /mnt sed -i "s|^GRUB_CMDLINE_LINUX_DEFAULT=.*|GRUB_CMDLINE_LINUX_DEFAULT=\"$CMDLINE\"|" /etc/default/grub
   echo "cryptroot UUID=$LUKS_UUID none luks" > /mnt/etc/crypttab.initramfs
-  if arch-chroot /mnt sh -c "grep -q 'encrypt' /etc/mkinitcpio.conf"; then
-    info "encrypt hook already present"
+  if arch-chroot /mnt sh -c "grep -q '^HOOKS=.*\\(encrypt\\|sd-encrypt\\)' /etc/mkinitcpio.conf"; then
+    info "encrypt hook already present in HOOKS line"
   else
-    arch-chroot /mnt sed -i '/^HOOKS=/s/ filesystems/ encrypt keymap filesystems/' /etc/mkinitcpio.conf
-    info "Added encrypt+keymap hooks to mkinitcpio.conf"
+    arch-chroot /mnt sed -i "/^HOOKS=/s/ filesystems/ $ENCRYPT_HOOK filesystems/" /etc/mkinitcpio.conf
+    info "Added $ENCRYPT_HOOK hook to mkinitcpio.conf"
   fi
   info "HOOKS line: $(arch-chroot /mnt grep '^HOOKS=' /etc/mkinitcpio.conf)"
   ok "LUKS configured (crypttab + initramfs)"

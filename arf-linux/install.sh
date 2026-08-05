@@ -284,7 +284,7 @@ SDDM
   if [ "$ENCRYPTED" = "yes" ] && [ -n "$LUKS_UUID" ]; then
     # Installer already wrote /etc/default/grub, crypttab.initramfs, HOOKS.
     # Regenerate in case GPU/package changes affect initramfs.
-    if grep -q 'cryptdevice=' /etc/default/grub; then
+    if grep -q '^GRUB_CMDLINE_LINUX_DEFAULT=.*\\(cryptdevice\\|rd.luks.name\\)' /etc/default/grub; then
       info "LUKS already configured by installer, regenerating initramfs/GRUB only"
       mkinitcpio -P 2>&1 | tail -5 || true
       grub-mkconfig -o /boot/grub/grub.cfg 2>&1 | tail -5 || true
@@ -293,15 +293,24 @@ SDDM
       # GRUB: unlock encrypted disk at boot
       sed -i 's|^#GRUB_ENABLE_CRYPTODISK=y|GRUB_ENABLE_CRYPTODISK=y|' /etc/default/grub
       grep -q '^GRUB_ENABLE_CRYPTODISK=' /etc/default/grub || echo 'GRUB_ENABLE_CRYPTODISK=y' >> /etc/default/grub
-      # Add cryptdevice to kernel cmdline
+      # Add cryptdevice / rd.luks.name to kernel cmdline
+      if grep -q '^HOOKS=.*systemd' /etc/mkinitcpio.conf; then
+        ENCRYPT_HOOK=sd-encrypt
+        CMDLINE_APPEND="rd.luks.name=$LUKS_UUID=cryptroot root=/dev/mapper/cryptroot"
+        info "systemd initramfs detected, using sd-encrypt hook"
+      else
+        ENCRYPT_HOOK="encrypt keymap"
+        CMDLINE_APPEND="cryptdevice=UUID=$LUKS_UUID:cryptroot root=/dev/mapper/cryptroot"
+        info "udev initramfs detected, using encrypt+keymap hooks"
+      fi
       local CURRENT_CMDLINE=$(grep '^GRUB_CMDLINE_LINUX_DEFAULT=' /etc/default/grub | sed 's/^GRUB_CMDLINE_LINUX_DEFAULT="//;s/"$//')
-      CURRENT_CMDLINE="$CURRENT_CMDLINE cryptdevice=UUID=$LUKS_UUID:cryptroot root=/dev/mapper/cryptroot"
+      CURRENT_CMDLINE="$CURRENT_CMDLINE $CMDLINE_APPEND"
       sed -i "s|^GRUB_CMDLINE_LINUX_DEFAULT=.*|GRUB_CMDLINE_LINUX_DEFAULT=\"$CURRENT_CMDLINE\"|" /etc/default/grub
       # crypttab
       echo "cryptroot UUID=$LUKS_UUID none luks" > /etc/crypttab.initramfs
-      # initramfs: add encrypt + keymap hooks BEFORE filesystems
-      if ! grep -q 'encrypt' /etc/mkinitcpio.conf; then
-        sed -i '/^HOOKS=/s/ filesystems/ encrypt keymap filesystems/' /etc/mkinitcpio.conf
+      # initramfs: add encrypt / sd-encrypt hook
+      if ! grep -q '^HOOKS=.*\\(encrypt\\|sd-encrypt\\)' /etc/mkinitcpio.conf; then
+        sed -i "/^HOOKS=/s/ filesystems/ $ENCRYPT_HOOK filesystems/" /etc/mkinitcpio.conf
       fi
       info "HOOKS line: $(grep '^HOOKS=' /etc/mkinitcpio.conf)"
       mkinitcpio -P 2>&1 | tail -5 || true
