@@ -279,31 +279,35 @@ SDDM
   fi
   ok "GRUB configured"
 
-  # ── LUKS encryption (btrfs or ext4) ────────────────────────────
+  # ── LUKS encryption (already configured by installer; only verify) ──
   info "ENCRYPTED=$ENCRYPTED LUKS_UUID=${LUKS_UUID:-unset}"
   if [ "$ENCRYPTED" = "yes" ] && [ -n "$LUKS_UUID" ]; then
-    info "Configuring LUKS encryption..."
-    # GRUB: unlock encrypted disk at boot
-    sed -i 's|^#GRUB_ENABLE_CRYPTODISK=y|GRUB_ENABLE_CRYPTODISK=y|' /etc/default/grub
-    grep -q '^GRUB_ENABLE_CRYPTODISK=' /etc/default/grub || echo 'GRUB_ENABLE_CRYPTODISK=y' >> /etc/default/grub
-    # Add cryptdevice to kernel cmdline
-    local CURRENT_CMDLINE=$(grep '^GRUB_CMDLINE_LINUX_DEFAULT=' /etc/default/grub | sed 's/^GRUB_CMDLINE_LINUX_DEFAULT="//;s/"$//')
-    CURRENT_CMDLINE="$CURRENT_CMDLINE cryptdevice=UUID=$LUKS_UUID:cryptroot root=/dev/mapper/cryptroot"
-    sed -i "s|^GRUB_CMDLINE_LINUX_DEFAULT=.*|GRUB_CMDLINE_LINUX_DEFAULT=\"$CURRENT_CMDLINE\"|" /etc/default/grub
-    # crypttab
-    echo "cryptroot UUID=$LUKS_UUID none luks" > /etc/crypttab.initramfs
-    # initramfs: add encrypt + keymap hooks BEFORE filesystems
-    if grep -q 'encrypt' /etc/mkinitcpio.conf; then
-      info "encrypt hook already present in mkinitcpio.conf"
+    # Installer already wrote /etc/default/grub, crypttab.initramfs, HOOKS.
+    # Regenerate in case GPU/package changes affect initramfs.
+    if grep -q 'cryptdevice=' /etc/default/grub; then
+      info "LUKS already configured by installer, regenerating initramfs/GRUB only"
+      mkinitcpio -P 2>&1 | tail -5 || true
+      grub-mkconfig -o /boot/grub/grub.cfg 2>&1 | tail -5 || true
     else
-      sed -i '/^HOOKS=/s/ filesystems/ encrypt keymap filesystems/' /etc/mkinitcpio.conf
-      info "Added encrypt+keymap hooks to mkinitcpio.conf"
+      info "WARNING: LUKS enabled but installer config missing, configuring now"
+      # GRUB: unlock encrypted disk at boot
+      sed -i 's|^#GRUB_ENABLE_CRYPTODISK=y|GRUB_ENABLE_CRYPTODISK=y|' /etc/default/grub
+      grep -q '^GRUB_ENABLE_CRYPTODISK=' /etc/default/grub || echo 'GRUB_ENABLE_CRYPTODISK=y' >> /etc/default/grub
+      # Add cryptdevice to kernel cmdline
+      local CURRENT_CMDLINE=$(grep '^GRUB_CMDLINE_LINUX_DEFAULT=' /etc/default/grub | sed 's/^GRUB_CMDLINE_LINUX_DEFAULT="//;s/"$//')
+      CURRENT_CMDLINE="$CURRENT_CMDLINE cryptdevice=UUID=$LUKS_UUID:cryptroot root=/dev/mapper/cryptroot"
+      sed -i "s|^GRUB_CMDLINE_LINUX_DEFAULT=.*|GRUB_CMDLINE_LINUX_DEFAULT=\"$CURRENT_CMDLINE\"|" /etc/default/grub
+      # crypttab
+      echo "cryptroot UUID=$LUKS_UUID none luks" > /etc/crypttab.initramfs
+      # initramfs: add encrypt + keymap hooks BEFORE filesystems
+      if ! grep -q 'encrypt' /etc/mkinitcpio.conf; then
+        sed -i '/^HOOKS=/s/ filesystems/ encrypt keymap filesystems/' /etc/mkinitcpio.conf
+      fi
+      info "HOOKS line: $(grep '^HOOKS=' /etc/mkinitcpio.conf)"
+      mkinitcpio -P 2>&1 | tail -5 || true
+      grub-mkconfig -o /boot/grub/grub.cfg 2>&1 | tail -5 || true
+      ok "LUKS encryption configured (crypttab + initramfs)"
     fi
-    info "HOOKS line: $(grep '^HOOKS=' /etc/mkinitcpio.conf)"
-    # Regenerate initramfs and GRUB
-    mkinitcpio -P 2>&1 | tail -5 || true
-    grub-mkconfig -o /boot/grub/grub.cfg 2>&1 | tail -5 || true
-    ok "LUKS encryption configured (crypttab + initramfs)"
   else
     info "LUKS not enabled, skipping encryption config"
     # Regenerate initramfs for GPU drivers (non-encrypted)

@@ -269,6 +269,25 @@ echo "$USERNAME:$PASSWORD" | arch-chroot /mnt chpasswd
 echo "%wheel ALL=(ALL:ALL) ALL" > /mnt/etc/sudoers.d/10-wheel
 
 arch-chroot /mnt grub-install --target=x86_64-efi --efi-directory=/boot --bootloader-id=GRUB
+
+# ── LUKS boot config (must happen BEFORE grub-mkconfig + mkinitcpio) ──
+if [ "$ENCRYPT_CHOICE" = "yes" ] && [ -n "$LUKS_UUID" ]; then
+  info "Configuring LUKS in installed system..."
+  arch-chroot /mnt sed -i 's|^#GRUB_ENABLE_CRYPTODISK=y|GRUB_ENABLE_CRYPTODISK=y|' /etc/default/grub
+  arch-chroot /mnt sh -c "grep -q '^GRUB_ENABLE_CRYPTODISK=' /etc/default/grub || echo 'GRUB_ENABLE_CRYPTODISK=y' >> /etc/default/grub"
+  CMDLINE="quiet cryptdevice=UUID=$LUKS_UUID:cryptroot root=/dev/mapper/cryptroot"
+  arch-chroot /mnt sed -i "s|^GRUB_CMDLINE_LINUX_DEFAULT=.*|GRUB_CMDLINE_LINUX_DEFAULT=\"$CMDLINE\"|" /etc/default/grub
+  echo "cryptroot UUID=$LUKS_UUID none luks" > /mnt/etc/crypttab.initramfs
+  if arch-chroot /mnt sh -c "grep -q 'encrypt' /etc/mkinitcpio.conf"; then
+    info "encrypt hook already present"
+  else
+    arch-chroot /mnt sed -i '/^HOOKS=/s/ filesystems/ encrypt keymap filesystems/' /etc/mkinitcpio.conf
+    info "Added encrypt+keymap hooks to mkinitcpio.conf"
+  fi
+  info "HOOKS line: $(arch-chroot /mnt grep '^HOOKS=' /etc/mkinitcpio.conf)"
+  ok "LUKS configured (crypttab + initramfs)"
+fi
+
 arch-chroot /mnt grub-mkconfig -o /boot/grub/grub.cfg
 arch-chroot /mnt mkinitcpio -P
 arch-chroot /mnt systemctl enable NetworkManager
