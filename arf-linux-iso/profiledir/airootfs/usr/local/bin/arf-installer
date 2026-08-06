@@ -153,7 +153,6 @@ if [ "$FS_CHOICE" = "btrfs" ]; then
     if [ "$SWAP_CHOICE" != "none" ]; then
       btrfs subvolume create /mnt/@swap
       btrfs property set /mnt/@swap compression none
-      btrfs property set /mnt/@swap cow false
     fi
     umount /mnt
     mount -o subvol=@,compress=zstd "$ROOT_DEV" /mnt
@@ -188,6 +187,8 @@ if [ "$SWAP_CHOICE" != "none" ]; then
     info "Using @swap subvolume for swapfile"
     mkdir -p /mnt/swap
     mount -o subvol=@swap "$ROOT_DEV" /mnt/swap
+    touch /mnt/swap/swapfile
+    chattr +C /mnt/swap/swapfile 2>/dev/null || true
     dd if=/dev/zero of=/mnt/swap/swapfile bs=1M count=$(( ${SWAP_CHOICE%GB} * 1024 )) status=progress
     chmod 600 /mnt/swap/swapfile
     mkswap /mnt/swap/swapfile
@@ -195,8 +196,9 @@ if [ "$SWAP_CHOICE" != "none" ]; then
     SWAP_FSTAB="/swap/swapfile none swap sw 0 0"
   else
     if [ "$FS_CHOICE" = "btrfs" ]; then
-      dd if=/dev/zero of=/mnt/swapfile bs=1M count=$(( ${SWAP_CHOICE%GB} * 1024 )) status=progress
+      touch /mnt/swapfile
       chattr +C /mnt/swapfile 2>/dev/null || true
+      dd if=/dev/zero of=/mnt/swapfile bs=1M count=$(( ${SWAP_CHOICE%GB} * 1024 )) status=progress
     else
       fallocate -l "$SWAP_CHOICE" /mnt/swapfile
     fi
