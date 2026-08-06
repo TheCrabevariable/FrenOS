@@ -28,3 +28,6 @@ alias music-dl="yt-dlp --embed-thumbnail --no-playlist --embed-metadata -x --aud
 # Fren emoji icons
 export FREN_ICON_MODE=emoji
 export TERMINAL=kitty
+
+# load optional rice config
+[ -f ~/.rice.zsh ] && source ~/.rice.zsh
