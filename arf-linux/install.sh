@@ -124,7 +124,6 @@ stage2() {
     animu-bin
     fren-bin
     heroic-games-launcher-bin
-    powerlevel10k-git
     vesktop
     wlogout
   )
@@ -191,6 +190,10 @@ stage2() {
     cp "$DOTFILES/zsh/.rice.zsh" "$USER_HOME/.rice.zsh"
     chown "$USERNAME:" "$USER_HOME/.rice.zsh" 2>/dev/null || true
     ok "Applied .rice.zsh (Powerlevel10k config)"
+  fi
+  if [ ! -d "$USER_HOME/powerlevel10k" ]; then
+    info "Cloning powerlevel10k"
+    sudo -u "$USERNAME" git clone --depth 1 https://github.com/romkatv/powerlevel10k.git "$USER_HOME/powerlevel10k"
   fi
 
   mkdir -p "$USER_HOME/.config/mpd/playlists"
