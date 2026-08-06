@@ -58,7 +58,7 @@ stage2() {
   # Refresh mirrorlist with fastest mirrors
   if command -v reflector &>/dev/null; then
     info "Optimizing mirrorlist..."
-    reflector --latest 20 --sort rate --save /etc/pacman.d/mirrorlist 2>&1 || true
+    reflector --latest 20 --protocol https --sort rate --save /etc/pacman.d/mirrorlist 2>&1 || true
   fi
 
   pacman -Syu --noconfirm

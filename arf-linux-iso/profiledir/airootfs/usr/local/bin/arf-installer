@@ -69,7 +69,7 @@ fi
 
 # ── Mirrorlist optimization ────────────────────────────────────
 info "Optimizing mirrorlist for your location..."
-reflector --latest 20 --sort rate --save /etc/pacman.d/mirrorlist 2>&1 || info "Mirrorlist optimization skipped (no internet?)"
+reflector --latest 20 --protocol https --sort rate --save /etc/pacman.d/mirrorlist 2>&1 || info "Mirrorlist optimization skipped (no internet?)"
 ok "Mirrorlist optimized"
 
 FS_CHOICE=$(gum choose "btrfs" "ext4" --header "Filesystem")
