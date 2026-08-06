@@ -2,10 +2,11 @@
 
 Arch Linux automated installer ISO with Hyprland, Quickshell Tokyo Night bar, and single-reboot post-install configuration.
 
-- **BTRFS** — not working
+- **BTRFS** — being fixed
+- **SUBVOLUMES** — being fixed
 - **EXT4** — working
 - **SWAP** — working
-- **LUKS** — being fixed
+- **LUKS** — working
 
 i am working to make everything good
 
