@@ -341,11 +341,39 @@ SDDM
     info "Installing btrfs packages (grub-btrfs, snapper, btrfs-assistant)..."
     pacman -S --noconfirm --needed grub-btrfs snapper btrfs-assistant 2>/dev/null || true
     info "Configuring snapper for btrfs..."
-    # Remove existing @snapshots dir if snapper create-config needs to create it
-    # The @snapshots subvolume is already mounted at /.snapshots
-    snapper --no-dbus -c root create-config / 2>/dev/null || true
-    # Configure root snapshot: keep 5 hourly, 3 daily, 2 weekly
-    snapper --no-dbus -c root set-config "TIMELINE_CREATE=yes" "TIMELINE_LIMIT_HOURLY=5" "TIMELINE_LIMIT_DAILY=3" "TIMELINE_LIMIT_WEEKLY=2" 2>/dev/null || true
+    # /.snapshots is already the @snapshots subvolume, so snapper's
+    # create-config would fail ("subvolume .snapshots already exists").
+    # Write the config manually instead.
+    mkdir -p /etc/snapper/configs
+    if [ ! -f /etc/snapper/configs/root ]; then
+      cat > /etc/snapper/configs/root << 'SNAPPER'
+# subvolume
+SUBVOLUME="/"
+FSTYPE="btrfs"
+# users and groups
+ALLOW_GROUPS=""
+ALLOW_USERS=""
+ALLOW_USERS_GROUP=""
+SYNC_ACL="no"
+# background comparison
+BACKGROUND_COMPARISON="yes"
+# clean-up algorithm
+NUMBER_CLEANUP="yes"
+TIMELINE_CREATE="yes"
+TIMELINE_CLEANUP="yes"
+TIMELINE_MIN_AGE="1800"
+TIMELINE_LIMIT_HOURLY="5"
+TIMELINE_LIMIT_DAILY="3"
+TIMELINE_LIMIT_WEEKLY="2"
+TIMELINE_LIMIT_MONTHLY="0"
+TIMELINE_LIMIT_YEARLY="0"
+# pre/post snapshot clean-up
+EMPTY_PRE_POST_CLEANUP="yes"
+EMPTY_PRE_POST_MIN_AGE="1800"
+SNAPPER
+      chmod 600 /etc/snapper/configs/root
+      info "Wrote /etc/snapper/configs/root"
+    fi
     # Take initial "clean install" snapshot
     snapper --no-dbus -c root create -d "Clean install" --print-number 2>/dev/null || true
     systemctl enable --now snapper-timeline.timer 2>/dev/null || true
