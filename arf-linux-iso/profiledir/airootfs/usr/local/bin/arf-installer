@@ -73,6 +73,7 @@ reflector --latest 20 --protocol https --sort rate --save /etc/pacman.d/mirrorli
 ok "Mirrorlist optimized"
 
 FS_CHOICE=$(gum choose "btrfs" "ext4" --header "Filesystem")
+SUBVOLUMES=""
 SWAP_CHOICE=$(gum choose "none" "4GB" "8GB" --header "Swap size")
 ENCRYPT_CHOICE=$(gum choose "no" "yes" --header "Encrypt root partition with LUKS?" --selected "no")
 PARALLEL_DL=$(gum choose "1" "2" "3" "4" --header "Parallel downloads (pacman)")
@@ -145,6 +146,7 @@ if [ "$FS_CHOICE" = "btrfs" ]; then
   mkfs.btrfs -f "$ROOT_DEV"
   mount "$ROOT_DEV" /mnt
   if gum confirm "Create subvolumes (@, @home, @snapshots)?" --default=true; then
+    SUBVOLUMES=1
     btrfs subvolume create /mnt/@
     btrfs subvolume create /mnt/@home
     btrfs subvolume create /mnt/@snapshots
@@ -182,7 +184,8 @@ ok "Partitions created and mounted"
 # ── Swap ───────────────────────────────────────────────────
 if [ "$SWAP_CHOICE" != "none" ]; then
   info "Creating ${SWAP_CHOICE} swapfile..."
-  if [ "$FS_CHOICE" = "btrfs" ]; then
+  if [ "$FS_CHOICE" = "btrfs" ] && [ "$SUBVOLUMES" = "1" ]; then
+    info "Using @swap subvolume for swapfile"
     mkdir -p /mnt/swap
     mount -o subvol=@swap "$ROOT_DEV" /mnt/swap
     dd if=/dev/zero of=/mnt/swap/swapfile bs=1M count=$(( ${SWAP_CHOICE%GB} * 1024 )) status=progress
@@ -191,7 +194,12 @@ if [ "$SWAP_CHOICE" != "none" ]; then
     swapon /mnt/swap/swapfile
     SWAP_FSTAB="/swap/swapfile none swap sw 0 0"
   else
-    fallocate -l "$SWAP_CHOICE" /mnt/swapfile
+    if [ "$FS_CHOICE" = "btrfs" ]; then
+      dd if=/dev/zero of=/mnt/swapfile bs=1M count=$(( ${SWAP_CHOICE%GB} * 1024 )) status=progress
+      chattr +C /mnt/swapfile 2>/dev/null || true
+    else
+      fallocate -l "$SWAP_CHOICE" /mnt/swapfile
+    fi
     chmod 600 /mnt/swapfile
     mkswap /mnt/swapfile
     swapon /mnt/swapfile
