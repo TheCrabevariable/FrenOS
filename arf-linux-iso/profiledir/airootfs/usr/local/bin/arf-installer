@@ -152,7 +152,6 @@ if [ "$FS_CHOICE" = "btrfs" ]; then
     btrfs subvolume create /mnt/@snapshots
     if [ "$SWAP_CHOICE" != "none" ]; then
       btrfs subvolume create /mnt/@swap
-      btrfs property set /mnt/@swap compression none
     fi
     umount /mnt
     mount -o subvol=@,compress=zstd "$ROOT_DEV" /mnt
