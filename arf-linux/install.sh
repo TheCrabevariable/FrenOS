@@ -284,7 +284,7 @@ SDDM
   if [ "$ENCRYPTED" = "yes" ] && [ -n "$LUKS_UUID" ]; then
     # Installer already wrote /etc/default/grub, crypttab.initramfs, HOOKS.
     # Regenerate in case GPU/package changes affect initramfs.
-    if grep -q '^GRUB_CMDLINE_LINUX_DEFAULT=.*\\(cryptdevice\\|rd.luks.name\\)' /etc/default/grub; then
+    if grep -q '^GRUB_CMDLINE_LINUX_DEFAULT=.*\(cryptdevice\|rd.luks.name\)' /etc/default/grub; then
       info "LUKS already configured by installer, regenerating initramfs/GRUB only"
       mkinitcpio -P 2>&1 | tail -5 || true
       grub-mkconfig -o /boot/grub/grub.cfg 2>&1 | tail -5 || true
@@ -309,7 +309,7 @@ SDDM
       # crypttab
       echo "cryptroot UUID=$LUKS_UUID none luks" > /etc/crypttab.initramfs
       # initramfs: add encrypt / sd-encrypt hook
-      if ! grep -q '^HOOKS=.*\\(encrypt\\|sd-encrypt\\)' /etc/mkinitcpio.conf; then
+      if ! grep -q '^HOOKS=.*\(encrypt\|sd-encrypt\)' /etc/mkinitcpio.conf; then
         sed -i "/^HOOKS=/s/ filesystems/ $ENCRYPT_HOOK filesystems/" /etc/mkinitcpio.conf
       fi
       info "HOOKS line: $(grep '^HOOKS=' /etc/mkinitcpio.conf)"
