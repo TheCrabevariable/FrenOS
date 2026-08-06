@@ -124,6 +124,7 @@ stage2() {
     animu-bin
     fren-bin
     heroic-games-launcher-bin
+    powerlevel10k-git
     vesktop
     wlogout
   )
@@ -185,6 +186,11 @@ stage2() {
     chown "$USERNAME:" "$USER_HOME/.zshrc" 2>/dev/null || true
     chsh -s "$(which zsh)" "$USERNAME"
     ok "Applied config for zsh and set as default shell"
+  fi
+  if [ -f "$DOTFILES/zsh/.rice.zsh" ]; then
+    cp "$DOTFILES/zsh/.rice.zsh" "$USER_HOME/.rice.zsh"
+    chown "$USERNAME:" "$USER_HOME/.rice.zsh" 2>/dev/null || true
+    ok "Applied .rice.zsh (Powerlevel10k config)"
   fi
 
   mkdir -p "$USER_HOME/.config/mpd/playlists"
