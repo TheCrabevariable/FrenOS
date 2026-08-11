@@ -11,6 +11,7 @@ Arch Linux automated installer ISO with Hyprland, Quickshell Tokyo Night bar, an
 ## Knowed Issues
 
 - Vesktop wont install for whatever reason
+- RMPC have database error
 
 ## Features
 
