@@ -2,13 +2,15 @@
 
 Arch Linux automated installer ISO with Hyprland, Quickshell Tokyo Night bar, and single-reboot post-install configuration.
 
-- **BTRFS** — being fixed
-- **SUBVOLUMES** — being fixed
+- **BTRFS** — working
+- **SUBVOLUMES** — working
 - **EXT4** — working
 - **SWAP** — working
 - **LUKS** — working
 
-i am working to make everything good
+## Knowed Issues
+
+- Vesktop wont install for whatever reason
 
 ## Features
 
