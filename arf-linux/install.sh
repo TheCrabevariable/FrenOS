@@ -124,7 +124,7 @@ stage2() {
     animu-bin
     fren-bin
     heroic-games-launcher-bin
-    vesktop
+    vesktop-bin
     wlogout
   )
 
