@@ -157,8 +157,10 @@ stage2() {
     ln -sf /usr/lib/systemd/user/mpd-mpris.service ~/.config/systemd/user/default.target.wants/
   "
 
-  # Enable mpd
-  systemctl enable mpd 2>/dev/null || true
+  # Enable mpd (user service)
+  sudo -u "$USERNAME" bash -c "
+    ln -sf /usr/lib/systemd/user/mpd.service ~/.config/systemd/user/default.target.wants/
+  "
 
   # ── Dotfiles ──────────────────────────────────────────────────
   info "Applying dotfiles..."
