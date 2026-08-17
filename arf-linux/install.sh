@@ -103,6 +103,7 @@ stage2() {
     bluetui bluez bluez-utils playerctl brightnessctl lm_sensors breeze-cursors cliphist
     pipewire pipewire-pulse wireplumber power-profiles-daemon inotify-tools rsync
     xdg-desktop-portal xdg-desktop-portal-hyprland udiskie wlr-randr bazaar flatpak flatpak-xdg-utils gvfs udisks2 btop xdg-user-dirs libreoffice-fresh firefox cryptsetup
+    zram-generator zenity
   )
 
   pacman -S --noconfirm --needed "${OFFICIAL[@]}" os-prober
@@ -162,6 +163,13 @@ stage2() {
     ln -sf /usr/lib/systemd/user/mpd.service ~/.config/systemd/user/default.target.wants/
   "
 
+  # zram config
+  if [ -f "$DOTFILES/zram/zram-generator.conf" ]; then
+    mkdir -p /etc/systemd/zram-generator.conf.d
+    cp "$DOTFILES/zram/zram-generator.conf" /etc/systemd/zram-generator.conf.d/00-override.conf
+    ok "Applied zram config (compressed swap)"
+  fi
+
   # ── Dotfiles ──────────────────────────────────────────────────
   info "Applying dotfiles..."
 
@@ -208,6 +216,12 @@ stage2() {
     cp "$DOTFILES/frenos/update-fos" /usr/local/bin/update-fos
     chmod +x /usr/local/bin/update-fos
     ok "Installed update-fos (run 'update-fos' to update FrenOS)"
+  fi
+  # Install fren-welcome script
+  if [ -f "$DOTFILES/frenos/fren-welcome" ]; then
+    cp "$DOTFILES/frenos/fren-welcome" /usr/local/bin/fren-welcome
+    chmod +x /usr/local/bin/fren-welcome
+    ok "Installed fren-welcome (Super + / for keybinds)"
   fi
   chown -R "$USERNAME:" "$USER_HOME/.config/mpd" 2>/dev/null || true
 

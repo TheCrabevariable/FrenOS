@@ -27,6 +27,8 @@ hl.on("hyprland.start", function()
   hl.exec_cmd("hyprpaper")
   hl.exec_cmd("udiskie -t")
   hl.exec_cmd("wl-paste -t image/png --watch cliphist store")
+  -- First-boot welcome
+  hl.exec_cmd("test -f ~/.config/frenos/.welcome-seen || fren-welcome &")
   -- Input config (hl.config uses native Lua — no legacy parser needed)
   hl.config({
     input = {
@@ -123,6 +125,7 @@ hl.bind(mainMod .. " + R", hl.dsp.exec_cmd("/usr/bin/qs ipc call launcher toggle
 hl.bind(mainMod .. " + T", hl.dsp.exec_cmd("/usr/bin/qs ipc call theme toggle"))
 hl.bind(mainMod .. " + D", hl.dsp.exec_cmd("/usr/bin/qs ipc call monitors toggle"))
 hl.bind(mainMod .. " + ESCAPE", hl.dsp.exec_cmd("wlogout -b 3"))
+hl.bind(mainMod .. " + SLASH", hl.dsp.exec_cmd("fren-welcome"))
 
 -- Window management
 hl.bind(mainMod .. " + C", hl.dsp.window.close())
