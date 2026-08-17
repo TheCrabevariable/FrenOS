@@ -30,6 +30,5 @@ export FREN_ICON_MODE=emoji
 export TERMINAL=kitty
 
 # Powerlevel10k theme
+POWERLEVEL9K_CONFIG_FILE=~/.rice.zsh
 source ~/powerlevel10k/powerlevel10k.zsh-theme
-# load optional rice config
-[ -f ~/.rice.zsh ] && source ~/.rice.zsh
