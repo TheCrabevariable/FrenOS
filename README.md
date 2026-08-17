@@ -12,6 +12,11 @@ Arch Linux automated installer ISO with Hyprland, Quickshell Tokyo Night bar, an
 
 - RMPC have database error
 
+## Working on
+
+- ZRam
+- Welcome and keybinds app
+
 ## Features
 
 - **Automated install** — interactive stage1 with keyboard layout, disk selection, swap size, kernel choice, user setup, timezone
