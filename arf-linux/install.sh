@@ -103,7 +103,7 @@ stage2() {
     bluetui bluez bluez-utils playerctl brightnessctl lm_sensors breeze-cursors cliphist
     pipewire pipewire-pulse wireplumber power-profiles-daemon inotify-tools rsync
     xdg-desktop-portal xdg-desktop-portal-hyprland udiskie wlr-randr bazaar flatpak flatpak-xdg-utils gvfs udisks2 btop xdg-user-dirs libreoffice-fresh firefox cryptsetup
-    zram-generator zenity
+    zram-generator zenity kvantum
   )
 
   pacman -S --noconfirm --needed "${OFFICIAL[@]}" os-prober
@@ -125,6 +125,8 @@ stage2() {
     animu-bin
     fren-bin
     heroic-games-launcher-bin
+    lutris
+    tokyonight-gtk-theme-git
     vesktop-bin
     wlogout
   )
@@ -224,6 +226,34 @@ stage2() {
     ok "Installed fren-welcome (Super + / for keybinds)"
   fi
   chown -R "$USERNAME:" "$USER_HOME/.config/mpd" 2>/dev/null || true
+
+  # ── GTK/Qt theming (Tokyo Night) ────────────────────────────────
+  info "Applying Tokyo Night theme..."
+
+  # Kvantum (Qt theme engine)
+  if [ -d "$DOTFILES/kvantum/TokyoNight" ]; then
+    mkdir -p /usr/share/Kvantum/TokyoNight
+    cp "$DOTFILES/kvantum/TokyoNight/"* /usr/share/Kvantum/TokyoNight/
+    mkdir -p /etc/xdg/Kvantum
+    cp "$DOTFILES/kvantum/kvantum.kvconfig" /etc/xdg/Kvantum/kvantum.kvconfig
+    ok "Applied Kvantum Tokyo Night theme"
+  fi
+
+  # GTK3 settings
+  if [ -f "$DOTFILES/gtk-3.0/settings.ini" ]; then
+    mkdir -p "$USER_HOME/.config/gtk-3.0"
+    cp "$DOTFILES/gtk-3.0/settings.ini" "$USER_HOME/.config/gtk-3.0/settings.ini"
+    chown "$USERNAME:" "$USER_HOME/.config/gtk-3.0/settings.ini" 2>/dev/null || true
+    ok "Applied GTK3 Tokyo Night theme"
+  fi
+
+  # GTK4 settings
+  if [ -f "$DOTFILES/gtk-4.0/gtk.css" ]; then
+    mkdir -p "$USER_HOME/.config/gtk-4.0"
+    cp "$DOTFILES/gtk-4.0/gtk.css" "$USER_HOME/.config/gtk-4.0/gtk.css"
+    chown "$USERNAME:" "$USER_HOME/.config/gtk-4.0/gtk.css" 2>/dev/null || true
+    ok "Applied GTK4 Tokyo Night theme"
+  fi
 
   xdg-user-dirs-update 2>/dev/null || true
 

@@ -51,6 +51,7 @@ hl.env("HYPRCURSOR_THEME", "breeze")
 hl.env("HYPRCURSOR_SIZE", "24")
 hl.env("HYPRCURSOR_NO_ANIMATION", "1")
 hl.env("TERMINAL", "kitty")
+hl.env("QT_STYLE_OVERRIDE", "kvantum")
 
 -- General settings
 hl.config({
