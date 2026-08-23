@@ -103,7 +103,7 @@ stage2() {
     bluetui bluez bluez-utils playerctl brightnessctl lm_sensors breeze-cursors cliphist
     pipewire pipewire-pulse wireplumber power-profiles-daemon inotify-tools rsync
     xdg-desktop-portal xdg-desktop-portal-hyprland udiskie wlr-randr bazaar flatpak flatpak-xdg-utils gvfs udisks2 btop xdg-user-dirs libreoffice-fresh firefox cryptsetup
-    zram-generator zenity kvantum lutris
+    zram-generator zenity kvantum lutris qt6ct
   )
 
   pacman -S --noconfirm --needed "${OFFICIAL[@]}" os-prober
@@ -230,11 +230,12 @@ stage2() {
   info "Applying Tokyo Night theme..."
 
   # Kvantum (Qt theme engine)
-  if [ -d "$DOTFILES/kvantum/TokyoNight" ]; then
-    mkdir -p /usr/share/Kvantum/TokyoNight
-    cp "$DOTFILES/kvantum/TokyoNight/"* /usr/share/Kvantum/TokyoNight/
+  if [ -d "$DOTFILES/kvantum/Kvantum-Tokyo-Night" ]; then
+    mkdir -p "$USER_HOME/.local/share/Kvantum"
+    cp -r "$DOTFILES/kvantum/Kvantum-Tokyo-Night" "$USER_HOME/.local/share/Kvantum/"
     mkdir -p /etc/xdg/Kvantum
     cp "$DOTFILES/kvantum/kvantum.kvconfig" /etc/xdg/Kvantum/kvantum.kvconfig
+    chown -R "$USERNAME:" "$USER_HOME/.local/share/Kvantum" 2>/dev/null || true
     ok "Applied Kvantum Tokyo Night theme"
   fi
 
@@ -246,11 +247,17 @@ stage2() {
     ok "Applied GTK3 Tokyo Night theme"
   fi
 
-  # GTK4 settings
-  if [ -f "$DOTFILES/gtk-4.0/gtk.css" ]; then
+  # GTK4 settings (symlink into the tokyonight-gtk-theme package like upstream README)
+  if [ -d "/usr/share/themes/Tokyonight-Light/gtk-4.0" ]; then
     mkdir -p "$USER_HOME/.config/gtk-4.0"
-    cp "$DOTFILES/gtk-4.0/gtk.css" "$USER_HOME/.config/gtk-4.0/gtk.css"
-    chown "$USERNAME:" "$USER_HOME/.config/gtk-4.0/gtk.css" 2>/dev/null || true
+    ln -sf /usr/share/themes/Tokyonight-Light/gtk-4.0/assets "$USER_HOME/.config/gtk-4.0/assets"
+    ln -sf /usr/share/themes/Tokyonight-Light/gtk-4.0/gtk.css "$USER_HOME/.config/gtk-4.0/gtk.css"
+    ln -sf /usr/share/themes/Tokyonight-Light/gtk-4.0/gtk-dark.css "$USER_HOME/.config/gtk-4.0/gtk-dark.css"
+    chown -h "$USERNAME:" "$USER_HOME/.config/gtk-4.0/"{assets,gtk.css,gtk-dark.css} 2>/dev/null || true
+    if [ -f "$DOTFILES/gtk-4.0/settings.ini" ]; then
+      cp "$DOTFILES/gtk-4.0/settings.ini" "$USER_HOME/.config/gtk-4.0/settings.ini"
+      chown "$USERNAME:" "$USER_HOME/.config/gtk-4.0/settings.ini" 2>/dev/null || true
+    fi
     ok "Applied GTK4 Tokyo Night theme"
   fi
 

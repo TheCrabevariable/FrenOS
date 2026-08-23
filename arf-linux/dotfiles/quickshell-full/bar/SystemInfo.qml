@@ -103,7 +103,7 @@ Singleton {
   // Power Profile
   Process {
     id: powerProfileProc
-    command: ["sh", "-c", "busctl get-property org.freedesktop.UPower.PowerProfiles /org/freedesktop/UPower/PowerProfiles org.freedesktop.UPower.PowerProfiles ActiveProfile 2>/dev/null | cut -d'\"' -f2 || echo 'balanced'"]
+    command: ["sh", "-c", "powerprofilesctl get 2>/dev/null || echo 'balanced'"]
     running: true
 
     stdout: StdioCollector {
@@ -116,7 +116,7 @@ Singleton {
   // Temperature
   Process {
     id: tempProc
-    command: ["sh", "-c", "val=$(sensors 2>/dev/null | grep -oP '\\+[0-9.]+[°]?C' | head -1 | tr -d '+'); [ -n \"$val\" ] && echo \"$val\" || { val=$(cat /sys/class/thermal/thermal_zone*/temp 2>/dev/null | head -1); [ -n \"$val\" ] && [ \"$val\" -gt 0 ] 2>/dev/null && echo \"$((val/1000))°C\" || echo \"N/A\"; }"]
+    command: ["sh", "-c", "sensors 2>/dev/null | grep -E 'Package id 0|Tctl' | head -1 | awk '{print $2}' | sed 's/+//' || echo 'N/A'"]
     running: true
 
     stdout: StdioCollector {
@@ -126,25 +126,18 @@ Singleton {
     }
   }
 
-  // Update timer (5s for CPU/mem/temp/power, 10s for network/bt/battery)
+  // Update timer
   Timer {
-    interval: 5000
+    interval: 2000
     running: true
     repeat: true
     onTriggered: {
       cpuProc.running = true
       memProc.running = true
-      tempProc.running = true
-      powerProfileProc.running = true
-    }
-  }
-  Timer {
-    interval: 10000
-    running: true
-    repeat: true
-    onTriggered: {
       netProc.running = true
+      powerProfileProc.running = true
       batteryProc.running = true
+      tempProc.running = true
     }
   }
 }

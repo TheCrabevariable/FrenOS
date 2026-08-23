@@ -9,7 +9,7 @@ Singleton {
 
     property int currentIndex: 0
     property int previewIndex: -1
-    property bool wallpaperFeatureEnabled: true
+    property bool wallpaperFeatureEnabled: false
     property bool wallpaperMode: false
     property var wallpaperTheme: ({})
     onPreviewIndexChanged: {
@@ -101,6 +101,75 @@ Singleton {
             saveProc.command = ["sh", "-c", 'printf "%s" "$1" > "$HOME/.config/quickshell/theme.conf"', "sh", String(index)];
             saveProc.running = true;
             applyTheme(themes[index]);
+            propagateWallpapers(themes[index]);
+            applyQtGtkTheme(themes[index]);
+        }
+    }
+
+    function propagateWallpapers(t) {
+        if (!t.wallpapers) return;
+        var wp = t.wallpapers;
+
+        // Resolve ~ to HOME
+        var home = Quickshell.env("HOME");
+
+        // Hyprlock wallpaper (no sudo needed)
+        if (wp.hyprlock) {
+            var hyprlockSrc = wp.hyprlock.replace("~", home);
+            wallpaperHyprlockProc.command = ["sh", "-c", 'cp "' + hyprlockSrc + '" "$HOME/.config/hypr/wallpaper/hyprlock.png"'];
+            wallpaperHyprlockProc.running = true;
+        }
+
+        // Desktop wallpaper via hyprpaper
+        if (wp.desktop) {
+            var desktopSrc = wp.desktop.replace("~", home);
+            wallpaperDesktopProc.command = ["sh", "-c", 'hyprctl hyprpaper wallpaper "*,' + desktopSrc + '"'];
+            wallpaperDesktopProc.running = true;
+        }
+
+        // SDDM + GRUB wallpapers (need pkexec for system paths)
+        var cmds = [];
+        if (wp.sddm) {
+            var sddmSrc = wp.sddm.replace("~", home);
+            cmds.push('cp "' + sddmSrc + '" /usr/share/sddm/themes/sddm-flower-theme/Backgrounds/background.png');
+        }
+        if (wp.grub) {
+            var grubSrc = wp.grub.replace("~", home);
+            cmds.push('cp "' + grubSrc + '" /boot/grub/fgrub.png');
+        }
+        if (cmds.length > 0) {
+            wallpaperSystemProc.command = ["pkexec", "sh", "-c", cmds.join(" && ")];
+            wallpaperSystemProc.running = true;
+        }
+    }
+
+    function applyQtGtkTheme(t) {
+        if (!t.qt && !t.gtk) return;
+        var home = Quickshell.env("HOME");
+        var cmds = [];
+
+        // Qt: write qt5ct.conf and qt6ct.conf
+        if (t.qt) {
+            var qtConf = '[Appearance]\nstyle=' + t.qt.style + '\nicon_theme=' + t.qt.iconTheme + '\n\n[Fonts]\nfont="Sans,11,-1,5,400,0,0,0,0,0,Regular"\n';
+            cmds.push('printf "%s" "' + qtConf.replace(/\n/g, '\\n').replace(/"/g, '\\"') + '" > "$HOME/.config/qt5ct/qt5ct.conf"');
+            cmds.push('printf "%s" "' + qtConf.replace(/\n/g, '\\n').replace(/"/g, '\\"') + '" > "$HOME/.config/qt6ct/qt6ct.conf"');
+
+            // Activate Kvantum theme
+            if (t.qt.kvantum) {
+                cmds.push('kvantummanager --set "' + t.qt.kvantum + '" 2>/dev/null || true');
+            }
+        }
+
+        // GTK: write gtk-3.0/settings.ini and gtk-4.0/settings.ini
+        if (t.gtk) {
+            var gtkConf = '[Settings]\ngtk-theme-name=' + t.gtk.theme + '\ngtk-icon-theme-name=' + t.gtk.iconTheme + '\ngtk-cursor-theme-name=breeze\n';
+            cmds.push('printf "%s" "' + gtkConf.replace(/\n/g, '\\n').replace(/"/g, '\\"') + '" > "$HOME/.config/gtk-3.0/settings.ini"');
+            cmds.push('printf "%s" "' + gtkConf.replace(/\n/g, '\\n').replace(/"/g, '\\"') + '" > "$HOME/.config/gtk-4.0/settings.ini"');
+        }
+
+        if (cmds.length > 0) {
+            qtGtkProc.command = ["sh", "-c", cmds.join(" && ")];
+            qtGtkProc.running = true;
         }
     }
 
@@ -198,6 +267,10 @@ Singleton {
     Process { id: kittyProc; running: false }
     Process { id: colorSchemeProc; running: false }
     Process { id: hyprlandProc; running: false }
+    Process { id: wallpaperHyprlockProc; running: false }
+    Process { id: wallpaperDesktopProc; running: false }
+    Process { id: wallpaperSystemProc; running: false }
+    Process { id: qtGtkProc; running: false }
 
     Process {
         id: loadProc
@@ -232,36 +305,6 @@ Singleton {
         }
     }
 
-    // Live-reloads the wallpaper-generated palette. When in wallpaper mode, a new
-    // wallpaper (and a fresh wallpaper-theme.json) repaints the shell instantly.
-    FileView {
-        id: wallpaperThemeFile
-        path: Quickshell.env("HOME") + "/.config/quickshell/theme-switcher/wallpaper-theme.json"
-        watchChanges: true
-
-        // True only for live, on-disk rewrites (set.sh executed) — not the initial
-        // load at startup. A fresh palette means a new wallpaper was set, so we
-        // switch the switcher into wallpaper mode rather than just repainting.
-        property bool liveChange: false
-        onFileChanged: { liveChange = true; reload(); }
-
-        onTextChanged: {
-            const raw = wallpaperThemeFile.text();
-            if (!raw) return;
-            try {
-                root.wallpaperTheme = JSON.parse(raw);
-                if (wallpaperThemeFile.liveChange && root.wallpaperTheme.bgBase)
-                    root.setWallpaperMode();
-                else if (root.wallpaperMode && root.wallpaperTheme.bgBase)
-                    root.applyTheme(root.wallpaperTheme);
-            } catch (e) {
-                console.error("Failed to parse wallpaper-theme.json:", e);
-            } finally {
-                wallpaperThemeFile.liveChange = false;
-            }
-        }
-    }
-
     FileView {
         id: themesFile
         path: Quickshell.env("HOME") + "/.config/quickshell/theme-switcher/themes.json"
@@ -280,6 +323,21 @@ Singleton {
     property var themes: [
         {
             name: "Night", family: "Tokyo Night",
+            wallpapers: {
+                desktop: "~/.config/quickshell/theme-switcher/wallpapers/tokyo-night/desktop.png",
+                hyprlock: "~/.config/quickshell/theme-switcher/wallpapers/tokyo-night/hyprlock.png",
+                sddm: "~/.config/quickshell/theme-switcher/wallpapers/tokyo-night/sddm.png",
+                grub: "~/.config/quickshell/theme-switcher/wallpapers/tokyo-night/grub.png"
+            },
+            qt: {
+                kvantum: "Kvantum-Tokyo-Night",
+                style: "kvantum-dark",
+                iconTheme: "Tokyonight-Dark"
+            },
+            gtk: {
+                theme: "Tokyonight-Dark",
+                iconTheme: "Tokyonight-Dark"
+            },
             bgBase: "#1a1b26", bgSurface: "#24283b", bgHover: "#1e2235",
             bgSelected: "#283457", bgBorder: "#32364a",
             textPrimary: "#c0caf5", textSecondary: "#a9b1d6", textMuted: "#565f89",

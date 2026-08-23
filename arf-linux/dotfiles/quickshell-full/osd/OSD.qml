@@ -17,10 +17,152 @@ Scope {
   property real brightnessValue: 0
   property real maxBrightness: 1
   property bool _brightnessReady: false
+  property bool _useDdcutil: false
 
   // PipeWire tracking
   PwObjectTracker {
     objects: [Pipewire.defaultAudioSink]
+  }
+
+  // Detect ddcutil availability
+  Process {
+    id: ddcutilDetect
+    command: ["sh", "-c", "command -v ddcutil >/dev/null 2>&1 && ddcutil getvcp 10 2>/dev/null | grep -q 'current value' && echo ok"]
+    running: true
+    stdout: StdioCollector {
+      onStreamFinished: {
+        if (text.trim() === "ok") {
+          root._useDdcutil = true;
+          ddcutilReadProc.running = true;
+        } else {
+          brightnessDiscovery.running = true;
+        }
+      }
+    }
+  }
+
+  // ddcutil brightness read
+  Process {
+    id: ddcutilReadProc
+    command: ["sh", "-c", "ddcutil getvcp 10 2>/dev/null | awk '/current value/{print $9}'"]
+    running: false
+    stdout: StdioCollector {
+      onStreamFinished: {
+        const val = parseFloat(text.trim());
+        if (!isNaN(val)) {
+          root.brightnessValue = val / 100;
+          root.maxBrightness = 100;
+          if (root._brightnessReady) {
+            root.showBrightness = true;
+            brightnessHideTimer.restart();
+          }
+          root._brightnessReady = true;
+        }
+      }
+    }
+  }
+
+  // ddcutil brightness up
+  Process {
+    id: ddcutilUpProc
+    command: ["sh", "-c", "ddcutil setvcp 10 + 5 2>/dev/null && ddcutil getvcp 10 2>/dev/null | awk '/current value/{print $9}'"]
+    running: false
+    stdout: StdioCollector {
+      onStreamFinished: {
+        const val = parseFloat(text.trim());
+        if (!isNaN(val)) root.brightnessValue = val / 100;
+        root.showBrightness = true;
+        brightnessHideTimer.restart();
+      }
+    }
+  }
+
+  // ddcutil brightness down
+  Process {
+    id: ddcutilDownProc
+    command: ["sh", "-c", "ddcutil setvcp 10 - 5 2>/dev/null && ddcutil getvcp 10 2>/dev/null | awk '/current value/{print $9}'"]
+    running: false
+    stdout: StdioCollector {
+      onStreamFinished: {
+        const val = parseFloat(text.trim());
+        if (!isNaN(val)) root.brightnessValue = val / 100;
+        root.showBrightness = true;
+        brightnessHideTimer.restart();
+      }
+    }
+  }
+
+  IpcHandler {
+    target: "osd"
+    function volumeUp(): void {
+      const sink = Pipewire.defaultAudioSink;
+      if (!sink || !sink.audio) return;
+      sink.audio.volume = Math.min(1.5, sink.audio.volume + 0.01);
+      root.volumeValue = sink.audio.volume;
+      root.volumeMuted = sink.audio.muted;
+      root.showVolume = true;
+      volumeHideTimer.restart();
+    }
+    function volumeDown(): void {
+      const sink = Pipewire.defaultAudioSink;
+      if (!sink || !sink.audio) return;
+      sink.audio.volume = Math.max(0, sink.audio.volume - 0.01);
+      root.volumeValue = sink.audio.volume;
+      root.volumeMuted = sink.audio.muted;
+      root.showVolume = true;
+      volumeHideTimer.restart();
+    }
+    function volumeMute(): void {
+      const sink = Pipewire.defaultAudioSink;
+      if (!sink || !sink.audio) return;
+      sink.audio.muted = !sink.audio.muted;
+      root.volumeMuted = sink.audio.muted;
+      root.volumeValue = sink.audio.volume;
+      root.showVolume = true;
+      volumeHideTimer.restart();
+    }
+    function brightnessUp(): void {
+      if (root._useDdcutil) ddcutilUpProc.running = true;
+      else brightnessUpBcProc.running = true;
+    }
+    function brightnessDown(): void {
+      if (root._useDdcutil) ddcutilDownProc.running = true;
+      else brightnessDownBcProc.running = true;
+    }
+  }
+
+  // brightnessctl fallback: up
+  Process {
+    id: brightnessUpBcProc
+    command: ["sh", "-c", "brightnessctl set 5%+ 2>/dev/null && brightnessctl -m 2>/dev/null | awk -F, '{print $4}' | tr -d '%[,max]'"]
+    running: false
+    stdout: StdioCollector {
+      onStreamFinished: {
+        const val = parseFloat(text.trim());
+        if (!isNaN(val) && root.maxBrightness > 0) {
+          root.brightnessValue = val / root.maxBrightness;
+        }
+        root.showBrightness = true;
+        brightnessHideTimer.restart();
+      }
+    }
+  }
+
+  // brightnessctl fallback: down
+  Process {
+    id: brightnessDownBcProc
+    command: ["sh", "-c", "brightnessctl set 5%- 2>/dev/null && brightnessctl -m 2>/dev/null | awk -F, '{print $4}' | tr -d '%[,max]'"]
+    running: false
+    stdout: StdioCollector {
+      onStreamFinished: {
+        const val = parseFloat(text.trim());
+        if (!isNaN(val) && root.maxBrightness > 0) {
+          root.brightnessValue = val / root.maxBrightness;
+        }
+        root.showBrightness = true;
+        brightnessHideTimer.restart();
+      }
+    }
   }
 
   Connections {
@@ -45,7 +187,7 @@ Scope {
     onTriggered: root.showVolume = false
   }
 
-  // Brightness monitoring
+  // Brightness monitoring (brightnessctl fallback path)
   FileView {
     id: brightnessFile
     path: ""
@@ -73,9 +215,9 @@ Scope {
   }
 
   Process {
-    id: backlightDiscovery
+    id: brightnessDiscovery
     command: ["sh", "-c", "p=$(ls -d /sys/class/backlight/*/brightness 2>/dev/null | head -1); [ -n \"$p\" ] && echo \"$p\" && cat \"${p%brightness}max_brightness\""]
-    running: true
+    running: false
     stdout: StdioCollector {
       onStreamFinished: {
         const lines = text.trim().split("\n");
