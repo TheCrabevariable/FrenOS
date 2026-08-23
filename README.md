@@ -10,6 +10,7 @@ Arch Linux automated installer ISO with Hyprland, Quickshell Tokyo Night bar, an
 - **ZRAM** — working
 - **SNAPPER** — working
 - **WELCOME & KEYBINDS APP** — working
+- **CLEARING OF CACHE** -building
 
 ## Known Issues
 
