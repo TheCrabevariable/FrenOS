@@ -7,22 +7,24 @@ Arch Linux automated installer ISO with Hyprland, Quickshell Tokyo Night bar, an
 - **EXT4** — working
 - **SWAP** — working
 - **LUKS** — working
+- **ZRAM** — working
+- **SNAPPER** — working
+- **WELCOME & KEYBINDS APP** — working
 
-## Knowed Issues
+## Known Issues
 
 - RMPC have database error
-
-## Working on
-
-- ZRam
-- Welcome and keybinds app
 
 ## Features
 
 - **Automated install** — interactive stage1 with keyboard layout, disk selection, swap size, kernel choice, user setup, timezone
 - **Single reboot** — stage2 can run in chroot during install, or on first boot via systemd oneshot
-- **Tokyo Night theme** — dark theme across bar, kitty, fastfetch, fren, btop, zed, hyprlock, SDDM, GRUB
-- **Quickshell bar** — app launcher (SUPER+R), theme switcher (SUPER+T), monitor manager (SUPER+D), power menu (SUPER+ESC), clickable WiFi/BT/power profile pills, color-coded CPU, clipboard manager, media player (mpd-mpris), calendar, audio mixer, notification center, network popup
+- **Tokyo Night theme** — dark theme across bar, kitty, fastfetch, fren, btop, zed, hyprlock, SDDM, GRUB + GTK3/GTK4 and Qt (Kvantum) apps
+- **Quickshell bar** — app launcher (SUPER+R), theme switcher (SUPER+T), monitor manager (SUPER+D), dashboard (SUPER+B), power menu (SUPER+ESC), clickable WiFi/BT/brightness/power pills with popups, color-coded CPU, clipboard manager, media player (mpd-mpris), calendar, audio mixer, notification center, network popup, OSD for volume/brightness keys
+- **Welcome app** — keybinds cheat sheet + GitHub link, opens on first login or with SUPER+/ 
+- **zram** — compressed swap in RAM (half of RAM, zstd), big win on low-RAM machines
+- **BTRFS snapshots** — snapper timeline/cleanup, grub-btrfs boot entries, btrfs-assistant GUI
+- **Powerlevel10k** — preconfigured zsh rice shipped as ~/.rice.zsh, no first-run wizard
 - **Hyprland** with Lua config (hyprland.lua) + minimal legacy parser (hyprland.conf)
 - **BTRFS** filesystem with zstd compression (ext4 also available)
 - **WiFi config** — prompted during install, persisted to installed system
@@ -92,6 +94,8 @@ Requires `archiso` on an Arch Linux system. Output: `out/frenos-<YYYY.MM>-x86_64
 | SUPER + R | App launcher (Quickshell) |
 | SUPER + T | Theme switcher (Quickshell) |
 | SUPER + D | Monitor manager (Quickshell) |
+| SUPER + B | Dashboard (Quickshell) |
+| SUPER + / | Welcome app (keybinds + GitHub) |
 | SUPER + ESC | Power menu |
 | SUPER + C | Close window |
 | SUPER + M | Exit Hyprland |
@@ -115,10 +119,14 @@ Requires `archiso` on an Arch Linux system. Output: `out/frenos-<YYYY.MM>-x86_64
 ## Post-Install
 
 Stage2 installs:
-- **AUR packages:** animu-bin, fren-bin, heroic-games-launcher-bin, vesktop, wlogout
+- **Official packages:** Hyprland suite, Quickshell, kitty, zed, steam, lutris, mpd/rmpc, firefox, libreoffice, flatpak/bazaar, zram-generator, kvantum + qt6ct, and more
+- **AUR packages:** animu-bin, fren-bin, heroic-games-launcher-bin, vesktop-bin, wlogout, tokyonight-gtk-theme-git
+- **Powerlevel10k:** cloned to ~/powerlevel10k, rice shipped as ~/.rice.zsh (loaded via POWERLEVEL9K_CONFIG_FILE)
+- **Tokyo Night GTK/Qt theming:** Kvantum-Tokyo-Night theme, GTK3 settings.ini (Tokyonight-Dark), GTK4 symlinks into the theme package
+- **zram:** ram/2 zstd compressed swap via zram-generator
 - **Firefox:** pre-configured with uBlock Origin and Tokyo Night V3 (xMdb) theme via policies.json
-- **Flatpaks:** Heroic Game Launcher
-- **Dotfiles:** hyprland, kitty, btop, fastfetch, fren, zed, zsh, rmpc
+- **Dotfiles:** hyprland, quickshell (bar/dashboard/OSD/theme switcher), kitty, btop, fastfetch, fren, zed, zsh, rmpc, mpd (user service)
+- **BTRFS only:** snapper configs, grub-btrfsd, btrfs-assistant, initial "Clean install" snapshot
 - **Wallpapers:** cloned from [TheCrabevariable/Wallpaper](https://github.com/TheCrabevariable/Wallpaper)
 - **SDDM theme:** flower theme with Tokyo Night colors
-- **Customizations:** kitty with inline Tokyo Night colors, QS with /proc/stat CPU, disk-cached image previews, session remember, wifi/bt/power profile toggles, cliphist clipboard manager, mpd-mpris media bridge
+- **fren-welcome:** installed to /usr/local/bin — keybinds cheat sheet on first login or SUPER+/
