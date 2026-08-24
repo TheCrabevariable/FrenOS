@@ -456,14 +456,18 @@ fi
 # ── Done ──────────────────────────────────────────────────────
 ok "Installation complete!"
 echo ""
-if gum confirm "Enter chroot to inspect the install before reboot?" --default=true; then
-  info "Entering chroot. Type 'exit' to return."
-  arch-chroot /mnt
-  info "Rebooting..."
+
+do_reboot() {
+  ok "Rebooting now..."
   sleep 2
-  reboot
-else
-  info "Rebooting in 5 seconds..."
-  sleep 5
-  reboot
+  systemctl reboot 2>/dev/null || reboot -f 2>/dev/null || {
+    err "Automatic reboot failed — please reboot manually"
+  }
+}
+
+if gum confirm "Inspect the install in chroot before rebooting?" --default=false; then
+  info "Entering chroot. Type 'exit' to return."
+  arch-chroot /mnt || true
 fi
+
+do_reboot
