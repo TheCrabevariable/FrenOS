@@ -82,8 +82,8 @@ PanelWindow {
   // ======== Right-side panel ========
   Rectangle {
     id: panel
-    width: 136
-    height: sessionCol.implicitHeight + 28
+    width: sessionRow.implicitWidth + 28
+    height: sessionRow.implicitHeight + 28
     radius: 18
     color: root.theme.bgBase
     border.color: root.theme.bgBorder
@@ -91,12 +91,12 @@ PanelWindow {
     focus: true
     Keys.onEscapePressed: root.close()
 
-    anchors.right: parent.right
-    anchors.verticalCenter: parent.verticalCenter
-    anchors.rightMargin: root.shown ? 20 : -(width + 60)
+    anchors.horizontalCenter: parent.horizontalCenter
+    anchors.bottom: parent.bottom
+    anchors.bottomMargin: root.shown ? 24 : -(height + 60)
     opacity: root.shown ? 1 : 0
 
-    Behavior on anchors.rightMargin {
+    Behavior on anchors.bottomMargin {
       NumberAnimation {
         duration: root.shown ? 420 : 260
         easing.type: root.shown ? Easing.OutBack : Easing.InCubic
@@ -108,8 +108,8 @@ PanelWindow {
       NumberAnimation { duration: 200; easing.type: Easing.OutCubic }
     }
 
-    ColumnLayout {
-      id: sessionCol
+    RowLayout {
+      id: sessionRow
       anchors.fill: parent
       anchors.margins: 14
       spacing: 10
