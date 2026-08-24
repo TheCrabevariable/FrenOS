@@ -446,13 +446,7 @@ cp /etc/resolv.conf /mnt/etc/resolv.conf 2>/dev/null || true
 if arch-chroot /mnt bash -c "
   export USERNAME=$USERNAME HOME=/home/$USERNAME PARALLEL_DL=$PARALLEL_DL FS_CHOICE=$FS_CHOICE ENCRYPTED=$ENCRYPT_CHOICE LUKS_UUID=$LUKS_UUID ZRAM_CHOICE=$ZRAM_CHOICE
   bash /home/$USERNAME/arf-linux/install.sh --stage2
-  STAGE2_EXIT=\$?
-  if [ \$STAGE2_EXIT -eq 0 ]; then
-    rm -f /etc/systemd/system/multi-user.target.wants/arf-stage2.service
-    rm -f /etc/systemd/system/arf-stage2.service
-    rm -f /etc/arf-linux.env
-  fi
-  exit \$STAGE2_EXIT
+  exit \$?
 " 2>&1; then
   ok "Stage2 complete"
 else
