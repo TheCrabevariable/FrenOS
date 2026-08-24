@@ -126,7 +126,6 @@ stage2() {
     fren-bin
     heroic-games-launcher-bin
     tokyonight-gtk-theme-git
-    wlogout
   )
 
   for aur_pkg in "${AUR[@]}"; do
