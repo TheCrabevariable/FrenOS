@@ -30,7 +30,7 @@ Item {
       onRead: data => {
         const path = data.trim()
         if (path.length > 0) {
-          copyImgProc.command = ["bash", "-c", "cp '" + path + "' /home/catboy/.face"]
+          copyImgProc.command = ["bash", "-c", "cp '" + path + "' \"$HOME/.face\""]
           copyImgProc.running = true
         }
       }
@@ -76,7 +76,7 @@ Item {
           Image {
             id: profileImage
             anchors.fill: parent
-            source: "file:///home/catboy/.face?" + root._imgSrc
+            source: "file://" + Quickshell.env("HOME") + "/.face?" + root._imgSrc
             fillMode: Image.PreserveAspectCrop
             visible: false
           }

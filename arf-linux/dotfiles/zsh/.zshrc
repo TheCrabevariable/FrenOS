@@ -4,7 +4,7 @@ HISTSIZE=50
 SAVEHIST=50
 # End of lines configured by zsh-newuser-install
 # The following lines were added by compinstall
-zstyle :compinstall filename '/home/catboy/.zshrc'
+zstyle :compinstall filename '~/.zshrc'
 
 autoload -U colors && colors
 export PS1="%{$(tput setaf 225)%}%n%{$(tput setaf 224)%}@%{$(tput setaf 105)%}%m %{$(tput setaf 133)%}%1~ %{$(tput sgr0)%}$ "
