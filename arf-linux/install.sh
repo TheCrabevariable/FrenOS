@@ -157,9 +157,10 @@ stage2() {
     ln -sf /usr/lib/systemd/user/mpd-mpris.service ~/.config/systemd/user/default.target.wants/
   "
 
-  # Enable mpd (user service)
+  # Enable mpd via socket activation (starts on first connection,
+  # so it never launches before ~/.config/mpd/mpd.conf exists)
   sudo -u "$USERNAME" bash -c "
-    ln -sf /usr/lib/systemd/user/mpd.service ~/.config/systemd/user/default.target.wants/
+    ln -sf /usr/lib/systemd/user/mpd.socket ~/.config/systemd/user/sockets.target.wants/
   "
 
   # zram config
@@ -209,6 +210,15 @@ stage2() {
   mkdir -p "$USER_HOME/Music"
   chown -R "$USERNAME:" "$USER_HOME/.config/mpd" 2>/dev/null || true
   chown -R "$USERNAME:" "$USER_HOME/Music" 2>/dev/null || true
+
+  # Restart user services if a session is already up (first-boot run:
+  # services may have started before dotfiles/config landed)
+  USER_UID=$(id -u "$USERNAME")
+  if [ -d "/run/user/$USER_UID" ]; then
+    sudo -u "$USERNAME" XDG_RUNTIME_DIR="/run/user/$USER_UID" systemctl --user daemon-reload 2>/dev/null || true
+    sudo -u "$USERNAME" XDG_RUNTIME_DIR="/run/user/$USER_UID" systemctl --user try-restart mpd.service mpd-mpris.service 2>/dev/null || true
+    ok "Restarted user services (session active)"
+  fi
 
   # Install update-fos script
   if [ -f "$DOTFILES/frenos/update-fos" ]; then
