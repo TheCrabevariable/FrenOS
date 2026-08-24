@@ -103,7 +103,7 @@ stage2() {
     bluetui bluez bluez-utils playerctl brightnessctl lm_sensors breeze-cursors cliphist
     pipewire pipewire-pulse wireplumber power-profiles-daemon inotify-tools rsync
     xdg-desktop-portal xdg-desktop-portal-hyprland udiskie wlr-randr bazaar flatpak flatpak-xdg-utils gvfs udisks2 btop xdg-user-dirs libreoffice-fresh firefox cryptsetup
-    zram-generator zenity kvantum lutris qt6ct ddcutil discord
+    zram-generator zenity kvantum lutris qt6ct ddcutil discord pacman-contrib
   )
 
   pacman -S --noconfirm --needed "${OFFICIAL[@]}" os-prober
@@ -148,6 +148,7 @@ stage2() {
   systemctl enable bluetooth
   systemctl enable power-profiles-daemon
   systemctl enable NetworkManager
+  systemctl enable paccache.timer 2>/dev/null || true
   sudo -u "$USERNAME" bash -c "
     mkdir -p ~/.config/systemd/user/default.target.wants
     ln -sf /usr/lib/systemd/user/pipewire.service ~/.config/systemd/user/default.target.wants/
@@ -171,6 +172,14 @@ stage2() {
     ok "Applied zram config (compressed swap)"
   fi
 
+  # journald size limits + one-time vacuum of old logs
+  if [ -f "$DOTFILES/journald/journald.conf" ]; then
+    mkdir -p /etc/systemd/journald.conf.d
+    cp "$DOTFILES/journald/journald.conf" /etc/systemd/journald.conf.d/00-frenos.conf
+    journalctl --vacuum-time=14d >/dev/null 2>&1 || true
+    ok "Applied journald limits (500M system / 100M runtime)"
+  fi
+
   # ── Dotfiles ──────────────────────────────────────────────────
   info "Applying dotfiles..."
 
@@ -181,7 +190,7 @@ stage2() {
   for dir in "$DOTFILES"/*/; do
     app="$(basename "$dir")"
     case "$app" in
-      dunst|firefox|frenos) continue ;;
+      zram|journald|dunst|firefox|frenos) continue ;;
       quickshell-full) app="quickshell" ;;
     esac
     target="$USER_HOME/.config/$app"
