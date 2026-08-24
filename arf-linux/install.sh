@@ -15,6 +15,9 @@ err()   { printf "${RED}==>${NC} %s\n" "$*" >&2; exit 1; }
 # If running inside the ISO-automated flow, these come from /etc/arf-linux.env.
 # If running manually, they default to the current user.
 USERNAME="${USERNAME:-$USER}"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+DOTFILES="$SCRIPT_DIR/dotfiles"
+USER_HOME=$(eval echo "~$USERNAME")
 
 # ── Stage 1: Live ISO ──────────────────────────────────────────
 stage1() {
@@ -141,7 +144,9 @@ stage2() {
   rm -f /etc/sudoers.d/99-arf
 
   # Flatpak apps (ProtonPlus: Proton/Wine tool manager, Flatseal: permission editor)
-  if command -v flatpak &>/dev/null; then
+  # First boot only — flatpak/bwrap breaks inside the chroot, and the big
+  # runtime download looks hung there. /run/archiso only exists on the ISO.
+  if command -v flatpak &>/dev/null && [ ! -d /run/archiso ]; then
     info "Setting up Flathub remote"
     flatpak remote-add --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo 2>/dev/null || true
     for fp_app in com.vysp3r.ProtonPlus com.github.tchx84.Flatseal; do
@@ -198,10 +203,6 @@ stage2() {
 
   # ── Dotfiles ──────────────────────────────────────────────────
   info "Applying dotfiles..."
-
-  SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-  DOTFILES="$SCRIPT_DIR/dotfiles"
-  USER_HOME=$(eval echo "~$USERNAME")
 
   for dir in "$DOTFILES"/*/; do
     app="$(basename "$dir")"
