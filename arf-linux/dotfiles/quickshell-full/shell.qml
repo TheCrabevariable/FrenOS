@@ -22,6 +22,7 @@ import "media"
 import "notification-center"
 import "clipboard"
 import "dashboard"
+import "session"
 
 Scope {
   ThemeSwitcher { id: ts }
@@ -38,4 +39,5 @@ Scope {
   MediaPopup { theme: ts.theme }
   NotificationCenter { theme: ts.theme }
   ClipboardPopup { theme: ts.theme }
+  SessionMenu { theme: ts.theme }
 }

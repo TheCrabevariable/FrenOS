@@ -32,11 +32,7 @@ Scope {
 
   IpcHandler {
     target: "dashboard"
-    function toggle(): void {
-      root.dashboardVisible = !root.dashboardVisible
-      if (root.dashboardVisible) dashboardPopup.visible = true
-      else dashboardPopup.visible = false
-    }
+    function toggle(): void { root.toggleDashboard() }
   }
 
   PwObjectTracker {
@@ -115,7 +111,35 @@ Scope {
 
   Process { id: brightnessSetProc; running: false }
 
-  property bool dashboardVisible: false
+  Process {
+    id: sessionToggleProc
+    command: ["qs", "ipc", "call", "session", "toggle"]
+    running: false
+  }
+
+  property bool dashShown: false
+
+  function showDashboard() {
+    dashHideTimer.stop()
+    dashboardPopup.visible = true
+    root.dashShown = true
+  }
+
+  function hideDashboard() {
+    root.dashShown = false
+    dashHideTimer.restart()
+  }
+
+  function toggleDashboard() {
+    if (root.dashShown) root.hideDashboard()
+    else root.showDashboard()
+  }
+
+  Timer {
+    id: dashHideTimer
+    interval: 350
+    onTriggered: dashboardPopup.visible = false
+  }
 
   Process {
     id: brightnessDiscover
@@ -263,10 +287,7 @@ Scope {
               anchors.margins: -4
               hoverEnabled: true
               cursorShape: Qt.PointingHandCursor
-              onClicked: {
-                root.dashboardVisible = !root.dashboardVisible
-                if (root.dashboardVisible) dashboardPopup.visible = true
-              }
+              onClicked: root.toggleDashboard()
             }
           }
 
@@ -335,10 +356,7 @@ Scope {
               anchors.fill: parent
               hoverEnabled: true
               cursorShape: Qt.PointingHandCursor
-              onClicked: {
-                root.dashboardVisible = !root.dashboardVisible
-                if (root.dashboardVisible) dashboardPopup.visible = true
-              }
+              onClicked: root.toggleDashboard()
             }
           }
 
@@ -352,10 +370,7 @@ Scope {
               anchors.fill: parent
               hoverEnabled: true
               cursorShape: Qt.PointingHandCursor
-              onClicked: {
-                root.dashboardVisible = !root.dashboardVisible
-                if (root.dashboardVisible) dashboardPopup.visible = true
-              }
+              onClicked: root.toggleDashboard()
             }
           }
         }
@@ -365,6 +380,23 @@ Scope {
           anchors.right: parent.right
           anchors.verticalCenter: parent.verticalCenter
           spacing: 8
+
+          // Session / power menu
+          Text {
+            text: "\uf011"
+            color: powerArea.containsMouse ? root.theme.accentRed : root.theme.textSecondary
+            font.pixelSize: 15
+            font.family: root.font
+
+            MouseArea {
+              id: powerArea
+              anchors.fill: parent
+              anchors.margins: -4
+              hoverEnabled: true
+              cursorShape: Qt.PointingHandCursor
+              onClicked: sessionToggleProc.running = true
+            }
+          }
 
           // Battery
           RowLayout {
@@ -445,9 +477,10 @@ Scope {
   // ==================== Dashboard Overlay ====================
   PanelWindow {
     id: dashboardPopup
-    visible: root.dashboardVisible
+    visible: false
 
     WlrLayershell.layer: WlrLayer.Overlay
+    WlrLayershell.keyboardFocus: WlrKeyboardFocus.Exclusive
     WlrLayershell.namespace: "quickshell-dashboard"
     exclusionMode: ExclusionMode.Ignore
 
@@ -458,32 +491,41 @@ Scope {
 
     MouseArea {
       anchors.fill: parent
-      onClicked: {
-        root.dashboardVisible = false
-        dashboardPopup.visible = false
-      }
+      focus: true
+      Keys.onEscapePressed: root.hideDashboard()
+      onClicked: root.hideDashboard()
     }
 
     Rectangle {
+      id: dashCard
       width: 720
       height: 580
       radius: 12
       color: Qt.rgba(root.theme.bgBase.r, root.theme.bgBase.g, root.theme.bgBase.b, 0.95)
       border.color: Qt.rgba(root.theme.accentPrimary.r, root.theme.accentPrimary.g, root.theme.accentPrimary.b, 0.3)
       border.width: 1
-      anchors.horizontalCenter: parent.horizontalCenter
-      anchors.top: parent.top
-      anchors.topMargin: 32
+      x: (parent.width - width) / 2
+      y: root.dashShown ? 32 : -(height + 60)
+      opacity: root.dashShown ? 1 : 0
+
+      Behavior on y {
+        NumberAnimation {
+          duration: root.dashShown ? 420 : 300
+          easing.type: root.dashShown ? Easing.OutBack : Easing.InCubic
+          easing.overshoot: 0.7
+        }
+      }
+
+      Behavior on opacity {
+        NumberAnimation { duration: 200; easing.type: Easing.OutCubic }
+      }
 
       Dashboard {
         anchors.fill: parent
         anchors.margins: 12
         theme: root.theme
         font: root.font
-        onClose: {
-          root.dashboardVisible = false
-          dashboardPopup.visible = false
-        }
+        onClose: root.hideDashboard()
       }
     }
   }
