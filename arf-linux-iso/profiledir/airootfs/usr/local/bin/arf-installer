@@ -295,7 +295,7 @@ if [ "$ENCRYPT_CHOICE" = "yes" ] && [ -n "$LUKS_UUID" ]; then
     info "udev initramfs detected, using encrypt+keymap hooks"
   fi
   arch-chroot /mnt sed -i "s|^GRUB_CMDLINE_LINUX_DEFAULT=.*|GRUB_CMDLINE_LINUX_DEFAULT=\"$CMDLINE\"|" /etc/default/grub
-  echo "cryptroot UUID=$LUKS_UUID none luks" > /mnt/etc/crypttab.initramfs
+  echo "cryptroot UUID=$LUKS_UUID none luks,discard" > /mnt/etc/crypttab.initramfs
   if arch-chroot /mnt sh -c "grep -q '^HOOKS=.*\\(encrypt\\|sd-encrypt\\)' /etc/mkinitcpio.conf"; then
     info "encrypt hook already present in HOOKS line"
   else
