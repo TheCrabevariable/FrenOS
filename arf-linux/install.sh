@@ -103,7 +103,7 @@ stage2() {
     bluetui bluez bluez-utils playerctl brightnessctl lm_sensors breeze-cursors cliphist
     pipewire pipewire-pulse wireplumber power-profiles-daemon inotify-tools rsync
     xdg-desktop-portal xdg-desktop-portal-hyprland udiskie wlr-randr bazaar flatpak flatpak-xdg-utils gvfs udisks2 btop xdg-user-dirs libreoffice-fresh firefox cryptsetup
-    zram-generator zenity kvantum lutris qt6ct ddcutil discord pacman-contrib
+    zram-generator zenity kvantum lutris qt6ct ddcutil discord pacman-contrib gamemode
   )
 
   pacman -S --noconfirm --needed "${OFFICIAL[@]}" os-prober
@@ -139,6 +139,19 @@ stage2() {
   done
 
   rm -f /etc/sudoers.d/99-arf
+
+  # Flatpak apps (ProtonPlus: Proton/Wine tool manager, Flatseal: permission editor)
+  if command -v flatpak &>/dev/null; then
+    info "Setting up Flathub remote"
+    flatpak remote-add --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo 2>/dev/null || true
+    for fp_app in com.vysp3r.ProtonPlus com.github.tchx84.Flatseal; do
+      if flatpak install -y --noninteractive flathub "$fp_app"; then
+        ok "Installed Flatpak app: $fp_app"
+      else
+        info "Flatpak app failed (non-fatal, retry via Bazaar): $fp_app"
+      fi
+    done
+  fi
 
   # Regenerate initramfs after GPU drivers + LUKS (done later in stage2)
   # mkinitcpio -P is called after LUKS config below
