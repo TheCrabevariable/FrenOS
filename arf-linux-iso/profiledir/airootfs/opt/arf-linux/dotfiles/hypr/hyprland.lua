@@ -19,6 +19,8 @@ hl.on("hyprland.start", function()
     pcall(dofile, mons2)
   end
   hl.exec_cmd("qs")
+  hl.exec_cmd("hyprctl keyword layerrule 'blur, quickshell'")
+  hl.exec_cmd("hyprctl keyword layerrule 'ignore_opacity, quickshell'")
   hl.exec_cmd("hypridle")
   hl.exec_cmd("systemctl --user start hyprpolkitagent")
   hl.exec_cmd("systemctl --user import-environment WAYLAND_DISPLAY DISPLAY")
@@ -27,6 +29,8 @@ hl.on("hyprland.start", function()
   hl.exec_cmd("hyprpaper")
   hl.exec_cmd("udiskie -t")
   hl.exec_cmd("wl-paste -t image/png --watch cliphist store")
+  -- First-boot welcome
+  hl.exec_cmd("test -f ~/.config/frenos/.welcome-seen || fren-welcome &")
   -- Input config (hl.config uses native Lua — no legacy parser needed)
   hl.config({
     input = {
@@ -49,6 +53,9 @@ hl.env("HYPRCURSOR_THEME", "breeze")
 hl.env("HYPRCURSOR_SIZE", "24")
 hl.env("HYPRCURSOR_NO_ANIMATION", "1")
 hl.env("TERMINAL", "kitty")
+hl.env("QT_QPA_PLATFORMTHEME", "qt6ct")
+hl.env("QT_STYLE_OVERRIDE", "kvantum-dark")
+hl.env("GTK_THEME", "Tokyonight-Dark")
 
 -- General settings
 hl.config({
@@ -67,9 +74,9 @@ hl.config({
   decoration = {
     rounding = 5,
     blur = {
-      enabled = false,
+      enabled = true,
       size = 3,
-      passes = 1,
+      passes = 2,
       vibrancy = 0.15,
     },
   },
@@ -118,11 +125,13 @@ local mainMod = "SUPER"
 
 -- Program launchers
 hl.bind(mainMod .. " + Q", hl.dsp.exec_cmd("kitty"))
+hl.bind(mainMod .. " + B", hl.dsp.exec_cmd("/usr/bin/qs ipc call dashboard toggle"))
 hl.bind(mainMod .. " + E", hl.dsp.exec_cmd("kitty -e env TERM=xterm-kitty fren"))
 hl.bind(mainMod .. " + R", hl.dsp.exec_cmd("/usr/bin/qs ipc call launcher toggle"))
 hl.bind(mainMod .. " + T", hl.dsp.exec_cmd("/usr/bin/qs ipc call theme toggle"))
 hl.bind(mainMod .. " + D", hl.dsp.exec_cmd("/usr/bin/qs ipc call monitors toggle"))
-hl.bind(mainMod .. " + ESCAPE", hl.dsp.exec_cmd("wlogout -b 3"))
+hl.bind(mainMod .. " + ESCAPE", hl.dsp.exec_cmd("/usr/bin/qs ipc call session toggle"))
+hl.bind(mainMod .. " + SLASH", hl.dsp.exec_cmd("fren-welcome"))
 
 -- Window management
 hl.bind(mainMod .. " + C", hl.dsp.window.close())
@@ -180,12 +189,12 @@ hl.bind(mainMod .. " + mouse:272", hl.dsp.window.drag(), { mouse = true })
 hl.bind(mainMod .. " + mouse:273", hl.dsp.window.resize(), { mouse = true })
 
 -- Multimedia keys
-hl.bind("XF86AudioRaiseVolume", hl.dsp.exec_cmd("wpctl set-volume @DEFAULT_AUDIO_SINK@ 1%+"), { locked = true, repeating = true })
-hl.bind("XF86AudioLowerVolume", hl.dsp.exec_cmd("wpctl set-volume @DEFAULT_AUDIO_SINK@ 1%-"), { locked = true, repeating = true })
-hl.bind("XF86AudioMute",        hl.dsp.exec_cmd("wpctl set-mute @DEFAULT_AUDIO_SINK@ toggle"), { locked = true })
+hl.bind("XF86AudioRaiseVolume", hl.dsp.exec_cmd("qs ipc call osd volumeUp"), { locked = true, repeating = true })
+hl.bind("XF86AudioLowerVolume", hl.dsp.exec_cmd("qs ipc call osd volumeDown"), { locked = true, repeating = true })
+hl.bind("XF86AudioMute",        hl.dsp.exec_cmd("qs ipc call osd volumeMute"), { locked = true })
 hl.bind("XF86AudioMicMute",     hl.dsp.exec_cmd("wpctl set-mute @DEFAULT_AUDIO_SOURCE@ toggle"), { locked = true })
-hl.bind("XF86MonBrightnessUp",   hl.dsp.exec_cmd("brightnessctl s 10%+"), { locked = true, repeating = true })
-hl.bind("XF86MonBrightnessDown", hl.dsp.exec_cmd("brightnessctl s 10%-"), { locked = true, repeating = true })
+hl.bind("XF86MonBrightnessUp",   hl.dsp.exec_cmd("qs ipc call osd brightnessUp"), { locked = true, repeating = true })
+hl.bind("XF86MonBrightnessDown", hl.dsp.exec_cmd("qs ipc call osd brightnessDown"), { locked = true, repeating = true })
 
 -- Media keys
 hl.bind("XF86AudioNext",  hl.dsp.exec_cmd("playerctl next"),       { locked = true })

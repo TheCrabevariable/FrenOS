@@ -28,3 +28,7 @@ alias music-dl="yt-dlp --embed-thumbnail --no-playlist --embed-metadata -x --aud
 # Fren emoji icons
 export FREN_ICON_MODE=emoji
 export TERMINAL=kitty
+
+# Powerlevel10k theme
+POWERLEVEL9K_CONFIG_FILE=~/.rice.zsh
+source ~/powerlevel10k/powerlevel10k.zsh-theme

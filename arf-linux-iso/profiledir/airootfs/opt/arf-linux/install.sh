@@ -58,7 +58,7 @@ stage2() {
   # Refresh mirrorlist with fastest mirrors
   if command -v reflector &>/dev/null; then
     info "Optimizing mirrorlist..."
-    reflector --latest 20 --sort rate --save /etc/pacman.d/mirrorlist 2>&1 || true
+    reflector --latest 20 --protocol https --sort rate --save /etc/pacman.d/mirrorlist 2>&1 || true
   fi
 
   pacman -Syu --noconfirm
@@ -103,6 +103,7 @@ stage2() {
     bluetui bluez bluez-utils playerctl brightnessctl lm_sensors breeze-cursors cliphist
     pipewire pipewire-pulse wireplumber power-profiles-daemon inotify-tools rsync
     xdg-desktop-portal xdg-desktop-portal-hyprland udiskie wlr-randr bazaar flatpak flatpak-xdg-utils gvfs udisks2 btop xdg-user-dirs libreoffice-fresh firefox cryptsetup
+    zram-generator zenity kvantum lutris qt6ct ddcutil discord
   )
 
   pacman -S --noconfirm --needed "${OFFICIAL[@]}" os-prober
@@ -124,8 +125,7 @@ stage2() {
     animu-bin
     fren-bin
     heroic-games-launcher-bin
-    vesktop
-    wlogout
+    tokyonight-gtk-theme-git
   )
 
   for aur_pkg in "${AUR[@]}"; do
@@ -157,8 +157,17 @@ stage2() {
     ln -sf /usr/lib/systemd/user/mpd-mpris.service ~/.config/systemd/user/default.target.wants/
   "
 
-  # Enable mpd
-  systemctl enable mpd 2>/dev/null || true
+  # Enable mpd (user service)
+  sudo -u "$USERNAME" bash -c "
+    ln -sf /usr/lib/systemd/user/mpd.service ~/.config/systemd/user/default.target.wants/
+  "
+
+  # zram config
+  if [ -f "$DOTFILES/zram/zram-generator.conf" ]; then
+    mkdir -p /etc/systemd/zram-generator.conf.d
+    cp "$DOTFILES/zram/zram-generator.conf" /etc/systemd/zram-generator.conf.d/00-override.conf
+    ok "Applied zram config (compressed swap)"
+  fi
 
   # ── Dotfiles ──────────────────────────────────────────────────
   info "Applying dotfiles..."
@@ -170,7 +179,7 @@ stage2() {
   for dir in "$DOTFILES"/*/; do
     app="$(basename "$dir")"
     case "$app" in
-      quickshell-patch|dunst|firefox|frenos) continue ;;
+      dunst|firefox|frenos) continue ;;
       quickshell-full) app="quickshell" ;;
     esac
     target="$USER_HOME/.config/$app"
@@ -186,6 +195,15 @@ stage2() {
     chsh -s "$(which zsh)" "$USERNAME"
     ok "Applied config for zsh and set as default shell"
   fi
+  if [ -f "$DOTFILES/zsh/.rice.zsh" ]; then
+    cp "$DOTFILES/zsh/.rice.zsh" "$USER_HOME/.rice.zsh"
+    chown "$USERNAME:" "$USER_HOME/.rice.zsh" 2>/dev/null || true
+    ok "Applied .rice.zsh (Powerlevel10k config)"
+  fi
+  if [ ! -d "$USER_HOME/powerlevel10k" ]; then
+    info "Cloning powerlevel10k"
+    sudo -u "$USERNAME" git clone --depth 1 https://github.com/romkatv/powerlevel10k.git "$USER_HOME/powerlevel10k"
+  fi
 
   mkdir -p "$USER_HOME/.config/mpd/playlists"
   mkdir -p "$USER_HOME/Music"
@@ -198,7 +216,48 @@ stage2() {
     chmod +x /usr/local/bin/update-fos
     ok "Installed update-fos (run 'update-fos' to update FrenOS)"
   fi
+  # Install fren-welcome script
+  if [ -f "$DOTFILES/frenos/fren-welcome" ]; then
+    cp "$DOTFILES/frenos/fren-welcome" /usr/local/bin/fren-welcome
+    chmod +x /usr/local/bin/fren-welcome
+    ok "Installed fren-welcome (Super + / for keybinds)"
+  fi
   chown -R "$USERNAME:" "$USER_HOME/.config/mpd" 2>/dev/null || true
+
+  # ── GTK/Qt theming (Tokyo Night) ────────────────────────────────
+  info "Applying Tokyo Night theme..."
+
+  # Kvantum (Qt theme engine)
+  if [ -d "$DOTFILES/kvantum/Kvantum-Tokyo-Night" ]; then
+    mkdir -p "$USER_HOME/.local/share/Kvantum"
+    cp -r "$DOTFILES/kvantum/Kvantum-Tokyo-Night" "$USER_HOME/.local/share/Kvantum/"
+    mkdir -p /etc/xdg/Kvantum
+    cp "$DOTFILES/kvantum/kvantum.kvconfig" /etc/xdg/Kvantum/kvantum.kvconfig
+    chown -R "$USERNAME:" "$USER_HOME/.local/share/Kvantum" 2>/dev/null || true
+    ok "Applied Kvantum Tokyo Night theme"
+  fi
+
+  # GTK3 settings
+  if [ -f "$DOTFILES/gtk-3.0/settings.ini" ]; then
+    mkdir -p "$USER_HOME/.config/gtk-3.0"
+    cp "$DOTFILES/gtk-3.0/settings.ini" "$USER_HOME/.config/gtk-3.0/settings.ini"
+    chown "$USERNAME:" "$USER_HOME/.config/gtk-3.0/settings.ini" 2>/dev/null || true
+    ok "Applied GTK3 Tokyo Night theme"
+  fi
+
+  # GTK4 settings (symlink into the tokyonight-gtk-theme package like upstream README)
+  if [ -d "/usr/share/themes/Tokyonight-Light/gtk-4.0" ]; then
+    mkdir -p "$USER_HOME/.config/gtk-4.0"
+    ln -sf /usr/share/themes/Tokyonight-Light/gtk-4.0/assets "$USER_HOME/.config/gtk-4.0/assets"
+    ln -sf /usr/share/themes/Tokyonight-Light/gtk-4.0/gtk.css "$USER_HOME/.config/gtk-4.0/gtk.css"
+    ln -sf /usr/share/themes/Tokyonight-Light/gtk-4.0/gtk-dark.css "$USER_HOME/.config/gtk-4.0/gtk-dark.css"
+    chown -h "$USERNAME:" "$USER_HOME/.config/gtk-4.0/"{assets,gtk.css,gtk-dark.css} 2>/dev/null || true
+    if [ -f "$DOTFILES/gtk-4.0/settings.ini" ]; then
+      cp "$DOTFILES/gtk-4.0/settings.ini" "$USER_HOME/.config/gtk-4.0/settings.ini"
+      chown "$USERNAME:" "$USER_HOME/.config/gtk-4.0/settings.ini" 2>/dev/null || true
+    fi
+    ok "Applied GTK4 Tokyo Night theme"
+  fi
 
   xdg-user-dirs-update 2>/dev/null || true
 
@@ -279,31 +338,44 @@ SDDM
   fi
   ok "GRUB configured"
 
-  # ── LUKS encryption (btrfs or ext4) ────────────────────────────
+  # ── LUKS encryption (already configured by installer; only verify) ──
   info "ENCRYPTED=$ENCRYPTED LUKS_UUID=${LUKS_UUID:-unset}"
   if [ "$ENCRYPTED" = "yes" ] && [ -n "$LUKS_UUID" ]; then
-    info "Configuring LUKS encryption..."
-    # GRUB: unlock encrypted disk at boot
-    sed -i 's|^#GRUB_ENABLE_CRYPTODISK=y|GRUB_ENABLE_CRYPTODISK=y|' /etc/default/grub
-    grep -q '^GRUB_ENABLE_CRYPTODISK=' /etc/default/grub || echo 'GRUB_ENABLE_CRYPTODISK=y' >> /etc/default/grub
-    # Add cryptdevice to kernel cmdline
-    local CURRENT_CMDLINE=$(grep '^GRUB_CMDLINE_LINUX_DEFAULT=' /etc/default/grub | sed 's/^GRUB_CMDLINE_LINUX_DEFAULT="//;s/"$//')
-    CURRENT_CMDLINE="$CURRENT_CMDLINE cryptdevice=UUID=$LUKS_UUID:cryptroot root=/dev/mapper/cryptroot"
-    sed -i "s|^GRUB_CMDLINE_LINUX_DEFAULT=.*|GRUB_CMDLINE_LINUX_DEFAULT=\"$CURRENT_CMDLINE\"|" /etc/default/grub
-    # crypttab
-    echo "cryptroot UUID=$LUKS_UUID none luks" > /etc/crypttab.initramfs
-    # initramfs: add encrypt + keymap hooks BEFORE filesystems
-    if grep -q 'encrypt' /etc/mkinitcpio.conf; then
-      info "encrypt hook already present in mkinitcpio.conf"
+    # Installer already wrote /etc/default/grub, crypttab.initramfs, HOOKS.
+    # Regenerate in case GPU/package changes affect initramfs.
+    if grep -q '^GRUB_CMDLINE_LINUX_DEFAULT=.*\(cryptdevice\|rd.luks.name\)' /etc/default/grub; then
+      info "LUKS already configured by installer, regenerating initramfs/GRUB only"
+      mkinitcpio -P 2>&1 | tail -5 || true
+      grub-mkconfig -o /boot/grub/grub.cfg 2>&1 | tail -5 || true
     else
-      sed -i '/^HOOKS=/s/ filesystems/ encrypt keymap filesystems/' /etc/mkinitcpio.conf
-      info "Added encrypt+keymap hooks to mkinitcpio.conf"
+      info "WARNING: LUKS enabled but installer config missing, configuring now"
+      # GRUB: unlock encrypted disk at boot
+      sed -i 's|^#GRUB_ENABLE_CRYPTODISK=y|GRUB_ENABLE_CRYPTODISK=y|' /etc/default/grub
+      grep -q '^GRUB_ENABLE_CRYPTODISK=' /etc/default/grub || echo 'GRUB_ENABLE_CRYPTODISK=y' >> /etc/default/grub
+      # Add cryptdevice / rd.luks.name to kernel cmdline
+      if grep -q '^HOOKS=.*systemd' /etc/mkinitcpio.conf; then
+        ENCRYPT_HOOK=sd-encrypt
+        CMDLINE_APPEND="rd.luks.name=$LUKS_UUID=cryptroot root=/dev/mapper/cryptroot"
+        info "systemd initramfs detected, using sd-encrypt hook"
+      else
+        ENCRYPT_HOOK="encrypt keymap"
+        CMDLINE_APPEND="cryptdevice=UUID=$LUKS_UUID:cryptroot root=/dev/mapper/cryptroot"
+        info "udev initramfs detected, using encrypt+keymap hooks"
+      fi
+      local CURRENT_CMDLINE=$(grep '^GRUB_CMDLINE_LINUX_DEFAULT=' /etc/default/grub | sed 's/^GRUB_CMDLINE_LINUX_DEFAULT="//;s/"$//')
+      CURRENT_CMDLINE="$CURRENT_CMDLINE $CMDLINE_APPEND"
+      sed -i "s|^GRUB_CMDLINE_LINUX_DEFAULT=.*|GRUB_CMDLINE_LINUX_DEFAULT=\"$CURRENT_CMDLINE\"|" /etc/default/grub
+      # crypttab
+      echo "cryptroot UUID=$LUKS_UUID none luks" > /etc/crypttab.initramfs
+      # initramfs: add encrypt / sd-encrypt hook
+      if ! grep -q '^HOOKS=.*\(encrypt\|sd-encrypt\)' /etc/mkinitcpio.conf; then
+        sed -i "/^HOOKS=/s/ filesystems/ $ENCRYPT_HOOK filesystems/" /etc/mkinitcpio.conf
+      fi
+      info "HOOKS line: $(grep '^HOOKS=' /etc/mkinitcpio.conf)"
+      mkinitcpio -P 2>&1 | tail -5 || true
+      grub-mkconfig -o /boot/grub/grub.cfg 2>&1 | tail -5 || true
+      ok "LUKS encryption configured (crypttab + initramfs)"
     fi
-    info "HOOKS line: $(grep '^HOOKS=' /etc/mkinitcpio.conf)"
-    # Regenerate initramfs and GRUB
-    mkinitcpio -P 2>&1 | tail -5 || true
-    grub-mkconfig -o /boot/grub/grub.cfg 2>&1 | tail -5 || true
-    ok "LUKS encryption configured (crypttab + initramfs)"
   else
     info "LUKS not enabled, skipping encryption config"
     # Regenerate initramfs for GPU drivers (non-encrypted)
@@ -328,11 +400,39 @@ SDDM
     info "Installing btrfs packages (grub-btrfs, snapper, btrfs-assistant)..."
     pacman -S --noconfirm --needed grub-btrfs snapper btrfs-assistant 2>/dev/null || true
     info "Configuring snapper for btrfs..."
-    # Remove existing @snapshots dir if snapper create-config needs to create it
-    # The @snapshots subvolume is already mounted at /.snapshots
-    snapper --no-dbus -c root create-config / 2>/dev/null || true
-    # Configure root snapshot: keep 5 hourly, 3 daily, 2 weekly
-    snapper --no-dbus -c root set-config "TIMELINE_CREATE=yes" "TIMELINE_LIMIT_HOURLY=5" "TIMELINE_LIMIT_DAILY=3" "TIMELINE_LIMIT_WEEKLY=2" 2>/dev/null || true
+    # /.snapshots is already the @snapshots subvolume, so snapper's
+    # create-config would fail ("subvolume .snapshots already exists").
+    # Write the config manually instead.
+    mkdir -p /etc/snapper/configs
+    if [ ! -f /etc/snapper/configs/root ]; then
+      cat > /etc/snapper/configs/root << 'SNAPPER'
+# subvolume
+SUBVOLUME="/"
+FSTYPE="btrfs"
+# users and groups
+ALLOW_GROUPS=""
+ALLOW_USERS=""
+ALLOW_USERS_GROUP=""
+SYNC_ACL="no"
+# background comparison
+BACKGROUND_COMPARISON="yes"
+# clean-up algorithm
+NUMBER_CLEANUP="yes"
+TIMELINE_CREATE="yes"
+TIMELINE_CLEANUP="yes"
+TIMELINE_MIN_AGE="1800"
+TIMELINE_LIMIT_HOURLY="5"
+TIMELINE_LIMIT_DAILY="3"
+TIMELINE_LIMIT_WEEKLY="2"
+TIMELINE_LIMIT_MONTHLY="0"
+TIMELINE_LIMIT_YEARLY="0"
+# pre/post snapshot clean-up
+EMPTY_PRE_POST_CLEANUP="yes"
+EMPTY_PRE_POST_MIN_AGE="1800"
+SNAPPER
+      chmod 600 /etc/snapper/configs/root
+      info "Wrote /etc/snapper/configs/root"
+    fi
     # Take initial "clean install" snapshot
     snapper --no-dbus -c root create -d "Clean install" --print-number 2>/dev/null || true
     systemctl enable --now snapper-timeline.timer 2>/dev/null || true
@@ -344,15 +444,6 @@ SDDM
   fi
 
   ok "Stage 2 complete!"
-
-  # If running via the ISO automated flow, reboot automatically
-  if [ -f /etc/arf-linux.env ]; then
-    info "Rebooting in 5 seconds..."
-    sleep 5
-    systemctl reboot
-  else
-    echo "  Reboot to start SDDM and enjoy FrenOS!"
-  fi
 }
 
 # ── Main ───────────────────────────────────────────────────────

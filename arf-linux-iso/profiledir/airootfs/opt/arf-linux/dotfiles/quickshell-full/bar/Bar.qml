@@ -2,18 +2,20 @@ import Quickshell
 import QtQuick
 import QtQuick.Layouts
 import Quickshell.Hyprland
+import Quickshell.Wayland
 import Quickshell.Widgets
 import Quickshell.Services.SystemTray
 import Quickshell.Io
 import Quickshell.Services.Mpris
 import Quickshell.Services.Pipewire
+import "../dashboard"
+
 Scope {
   id: root
   property var theme: DefaultTheme {}
   property string font: "Hack Nerd Font"
   property bool barVisible: true
 
-  // MPRIS active player
   property var activePlayer: {
     const players = Mpris.players.values;
     if (!players || players.length === 0) return null;
@@ -28,95 +30,212 @@ Scope {
     function toggle(): void { root.barVisible = !root.barVisible; }
   }
 
+  IpcHandler {
+    target: "dashboard"
+    function toggle(): void { root.toggleDashboard() }
+  }
+
   PwObjectTracker {
     objects: [Pipewire.defaultAudioSink]
   }
 
-  // Brightness state
   property real brightnessValue: 0
   property real brightnessMax: 1
+  property bool hasBrightness: false
+  property string brightnessMethod: ""
+  property var ddcMonitors: []
+  property int selectedMonitorBus: -1
 
-  FileView {
-    id: brightnessFile
-    path: ""
-    watchChanges: true
-    onFileChanged: brightnessReadProc.running = true
+  function parseDdcDetect(text) {
+    const monitors = []
+    const blocks = text.split("Display ")
+    for (let i = 1; i < blocks.length; i++) {
+      const block = blocks[i]
+      const busMatch = block.match(/I2C bus:\s+\/dev\/i2c-(\d+)/)
+      const modelMatch = block.match(/Model:\s+(.+)/)
+      const mfgMatch = block.match(/Mfg id:\s+(.+)/)
+      const vcpMatch = block.match(/VCP version:\s+(.+)/)
+      if (busMatch) {
+        const bus = parseInt(busMatch[1])
+        const model = modelMatch ? modelMatch[1].trim() : "Unknown"
+        const mfg = mfgMatch ? mfgMatch[1].trim() : ""
+        const vcpOk = vcpMatch && !vcpMatch[1].includes("Detection failed")
+        monitors.push({ bus: bus, model: model, mfg: mfg, vcpOk: vcpOk, label: mfg + " " + model })
+      }
+    }
+    return monitors
   }
 
   Process {
-    id: brightnessReadProc
-    command: ["brightnessctl", "get"]
+    id: ddcDetectProc
+    command: ["ddcutil", "detect"]
     running: false
     stdout: StdioCollector {
       onStreamFinished: {
-        const val = parseInt(text.trim());
-        if (!isNaN(val) && root.brightnessMax > 0)
-          root.brightnessValue = val / root.brightnessMax;
+        root.ddcMonitors = root.parseDdcDetect(text)
+        if (root.ddcMonitors.length > 0 && root.selectedMonitorBus === -1) {
+          for (let i = 0; i < root.ddcMonitors.length; i++) {
+            if (root.ddcMonitors[i].vcpOk) {
+              root.selectedMonitorBus = root.ddcMonitors[i].bus
+              break
+            }
+          }
+          if (root.selectedMonitorBus === -1) {
+            root.selectedMonitorBus = root.ddcMonitors[0].bus
+          }
+          updateBrightnessPoll()
+          brightnessPollProc.running = true
+        }
       }
     }
   }
 
   Process {
-    id: brightnessSetProc
+    id: brightnessReadProc
     running: false
-  }
-
-  Process {
-    id: connectivityToggleProc
-    command: ["qs", "ipc", "call", "network", "toggle"]
-    running: false
-  }
-
-  Process {
-    id: powerProfileToggleProc
-    command: ["qs", "ipc", "call", "power-profile", "toggle"]
-    running: false
-  }
-
-  Process {
-    id: audioToggleProc
-    command: ["qs", "ipc", "call", "audio", "toggle"]
-    running: false
-  }
-
-  Process {
-    id: calendarToggleProc
-    command: ["qs", "ipc", "call", "calendar", "toggle"]
-    running: false
-  }
-
-  Process {
-    id: mediaToggleProc
-    command: ["qs", "ipc", "call", "media", "toggle"]
-    running: false
-  }
-
-  Process {
-    id: notifCenterToggleProc
-    command: ["qs", "ipc", "call", "notification-center", "toggle"]
-    running: false
-  }
-
-  Process {
-    id: clipboardToggleProc
-    command: ["qs", "ipc", "call", "clipboard", "toggle"]
-    running: false
-  }
-
-  Process {
-    id: backlightDiscovery
-    command: ["sh", "-c", "p=$(ls -d /sys/class/backlight/*/brightness 2>/dev/null | head -1); [ -n \"$p\" ] && echo \"$p\" && cat \"${p%brightness}max_brightness\""]
-    running: true
     stdout: StdioCollector {
       onStreamFinished: {
         const lines = text.trim().split("\n");
         if (lines.length >= 2) {
+          const cur = parseInt(lines[0]);
           const max = parseInt(lines[1]);
-          if (!isNaN(max) && max > 0) root.brightnessMax = max;
-          brightnessFile.path = lines[0];
-          brightnessReadProc.running = true;
+          if (!isNaN(cur) && !isNaN(max) && max > 0) {
+            root.brightnessMax = max;
+            root.brightnessValue = cur / max;
+            root.hasBrightness = true;
+          }
         }
       }
+    }
+  }
+
+  Process { id: brightnessSetProc; running: false }
+
+  property bool dashShown: false
+
+  function showDashboard() {
+    dashHideTimer.stop()
+    dashboardPopup.visible = true
+    root.dashShown = true
+  }
+
+  function hideDashboard() {
+    root.dashShown = false
+    dashHideTimer.restart()
+  }
+
+  function toggleDashboard() {
+    if (root.dashShown) root.hideDashboard()
+    else root.showDashboard()
+  }
+
+  Timer {
+    id: dashHideTimer
+    interval: 350
+    onTriggered: dashboardPopup.visible = false
+  }
+
+  Process {
+    id: brightnessDiscover
+    command: ["sh", "-c", "bc_max=$(brightnessctl max 2>/dev/null); if [ -n \"$bc_max\" ] && [ \"$bc_max\" -gt 1 ] 2>/dev/null; then echo 'brightnessctl'; brightnessctl get; echo \"$bc_max\"; elif ddcutil getvcp 10 2>/dev/null | grep -q 'current'; then echo 'ddcutil'; ddcutil getvcp 10 2>/dev/null | awk '/current/{for(i=1;i<=NF;i++)if($i ~ /^[0-9]+$/){print $i; exit}}'; ddcutil getvcp 10 2>/dev/null | awk '/max/{for(i=NF;i>0;i--)if($i ~ /^[0-9]+$/){print $i; exit}}'; else echo 'none'; fi"]
+    running: true
+    stdout: StdioCollector {
+      onStreamFinished: {
+        const lines = text.trim().split("\n");
+        if (lines[0] === "brightnessctl" && lines.length >= 3) {
+          root.brightnessMethod = "brightnessctl";
+          const cur = parseInt(lines[1]);
+          const max = parseInt(lines[2]);
+          if (!isNaN(cur) && !isNaN(max) && max > 0) {
+            root.brightnessMax = max;
+            root.brightnessValue = cur / max;
+            root.hasBrightness = true;
+          }
+        } else if (lines[0] === "ddcutil" && lines.length >= 3) {
+          root.brightnessMethod = "ddcutil";
+          const cur = parseInt(lines[1]);
+          const max = parseInt(lines[2]);
+          if (!isNaN(cur) && !isNaN(max) && max > 0) {
+            root.brightnessMax = max;
+            root.brightnessValue = cur / max;
+            root.hasBrightness = true;
+          }
+        } else {
+          root.hasBrightness = false;
+        }
+      }
+    }
+  }
+
+  Timer {
+    interval: 10000; running: true; repeat: true
+    onTriggered: {
+      updateBrightnessPoll();
+      brightnessPollProc.running = true;
+    }
+  }
+
+  Process {
+    id: brightnessPollProc
+    running: false
+    stdout: StdioCollector {
+      onStreamFinished: {
+        const lines = text.trim().split("\n");
+        if (lines.length >= 2) {
+          const cur = parseInt(lines[0]);
+          const max = parseInt(lines[1]);
+          if (!isNaN(cur) && !isNaN(max) && max > 0) {
+            root.brightnessMax = max;
+            root.brightnessValue = cur / max;
+          }
+        }
+      }
+    }
+  }
+
+  Component.onCompleted: {
+    brightnessDiscover.running = true;
+    ddcDetectProc.running = true;
+    updateVolumeDisplay();
+  }
+
+  property string volumeIconChar: "\uf026"
+  property string volumePercent: ""
+  property bool volumeMuted: false
+
+  Timer {
+    interval: 1000; running: true; repeat: true
+    onTriggered: updateVolumeDisplay()
+  }
+
+  function updateVolumeDisplay() {
+    const sink = Pipewire.defaultAudioSink;
+    if (!sink) {
+      volumeIconChar = "\uf026";
+      volumePercent = "";
+      volumeMuted = false;
+      return;
+    }
+    volumeMuted = !!sink.muted;
+    if (sink.muted) {
+      volumeIconChar = "\uf6a9";
+    } else {
+      const vol = sink.volume;
+      if (isNaN(vol) || vol < 0) volumeIconChar = "\uf026";
+      else if (vol > 0.66) volumeIconChar = "\uf028";
+      else if (vol > 0.33) volumeIconChar = "\uf027";
+      else volumeIconChar = "\uf026";
+    }
+    const vol = sink.volume;
+    if (!isNaN(vol)) volumePercent = Math.round(vol * 100) + "%";
+    else volumePercent = "";
+  }
+
+  function updateBrightnessPoll() {
+    if (root.brightnessMethod === "brightnessctl") {
+      brightnessPollProc.command = ["sh", "-c", "echo \"$(brightnessctl get)\"; echo \"$(brightnessctl max)\""];
+    } else if (root.brightnessMethod === "ddcutil" && root.selectedMonitorBus > 0) {
+      brightnessPollProc.command = ["sh", "-c", "ddcutil -b " + root.selectedMonitorBus + " getvcp 10 2>/dev/null | awk '/current/{for(i=1;i<=NF;i++)if($i ~ /^[0-9]+$/){print $i; exit}}'; ddcutil -b " + root.selectedMonitorBus + " getvcp 10 2>/dev/null | awk '/max/{for(i=NF;i>0;i--)if($i ~ /^[0-9]+$/){print $i; exit}}'"];
     }
   }
 
@@ -128,642 +247,263 @@ Scope {
       screen: modelData
       visible: root.barVisible
 
-      anchors {
-        top: true
-        left: true
-        right: true
-      }
+      anchors { top: true; left: true; right: true }
 
       implicitHeight: 32
-      color: root.theme.bgBase
+      color: Qt.rgba(root.theme.bgBase.r, root.theme.bgBase.g, root.theme.bgBase.b, 0.75)
 
       Item {
-        anchors.fill: parent
+        id: barContent
+        anchors.left: parent.left
+        anchors.right: parent.right
+        anchors.top: parent.top
         anchors.leftMargin: 10
         anchors.rightMargin: 10
+        height: 32
 
-        // Left section: Time + Workspaces + Now Playing
-        Row {
+        // ==================== LEFT: Arch + Workspaces ====================
+        RowLayout {
           id: leftSection
           anchors.left: parent.left
           anchors.verticalCenter: parent.verticalCenter
-          spacing: 8
-
-          // Time
-          Rectangle {
-            height: 24
-            width: timeDate.width + 16
-            radius: 12
-            color: root.theme.bgSurface
-
-            Row {
-              id: timeDate
-              anchors.centerIn: parent
-              spacing: 8
-
-              Text {
-                anchors.verticalCenter: parent.verticalCenter
-                text: ""
-                color: root.theme.accentPrimary
-                font.pixelSize: 14
-                font.family: root.font
-              }
-
-              Text {
-                anchors.verticalCenter: parent.verticalCenter
-                text: Time.timeString
-                color: root.theme.textPrimary
-                font.pixelSize: 12
-                font.family: root.font
-              }
-
-              Text {
-                anchors.verticalCenter: parent.verticalCenter
-                text: Time.dateString
-                color: root.theme.textSecondary
-                font.pixelSize: 12
-                font.family: root.font
-              }
-            }
-
-            MouseArea {
-              anchors.fill: parent
-              cursorShape: Qt.PointingHandCursor
-              onClicked: calendarToggleProc.running = true
-            }
-          }
-
-          // Workspaces
-          Row {
-            spacing: 4
-
-            Repeater {
-              model: Hyprland.workspaces
-
-              Rectangle {
-                id: wsPill
-                required property var modelData
-                property bool urgentBlink: false
-
-                Accessible.role: Accessible.Button
-                Accessible.name: "Workspace " + modelData.id + (modelData.focused ? ", active" : "") + (modelData.urgent ? ", urgent" : "")
-
-                width: modelData.focused ? 32 : 24
-                height: 24
-                radius: 12
-                color: modelData.focused ? root.theme.accentPrimary :
-                       modelData.urgent && urgentBlink ? root.theme.accentRed : root.theme.bgSurface
-
-                Behavior on color {
-                  ColorAnimation { duration: 150 }
-                }
-
-                SequentialAnimation {
-                  loops: Animation.Infinite
-                  running: wsPill.modelData.urgent && !wsPill.modelData.focused
-
-                  PropertyAction { target: wsPill; property: "urgentBlink"; value: true }
-                  PauseAnimation { duration: 500 }
-                  PropertyAction { target: wsPill; property: "urgentBlink"; value: false }
-                  PauseAnimation { duration: 500 }
-
-                  onStopped: wsPill.urgentBlink = false
-                }
-
-                Text {
-                  anchors.centerIn: parent
-                  text: wsPill.modelData.id
-                  color: wsPill.modelData.focused ? root.theme.bgBase : root.theme.textPrimary
-                  font.pixelSize: 11
-                  font.family: root.font
-                  font.bold: wsPill.modelData.focused
-                }
-
-                MouseArea {
-                  anchors.fill: parent
-                  onClicked: wsPill.modelData.activate()
-                }
-
-                Behavior on width {
-                  NumberAnimation { duration: 150 }
-                }
-              }
-            }
-          }
-
-          // Now Playing
-          Rectangle {
-            height: 24
-            width: nowPlayingContent.width + 16
-            radius: 12
-            color: root.theme.bgSurface
-            visible: root.activePlayer !== null
-
-            Accessible.role: Accessible.Button
-            Accessible.name: {
-              if (!root.activePlayer) return "No media";
-              const artist = root.activePlayer.trackArtist || "";
-              const title = root.activePlayer.trackTitle || "";
-              return "Now playing: " + (artist ? artist + " - " : "") + title;
-            }
-
-            Row {
-              id: nowPlayingContent
-              anchors.verticalCenter: parent.verticalCenter
-              anchors.left: parent.left
-              anchors.leftMargin: 8
-              spacing: 6
-
-              Text {
-                anchors.verticalCenter: parent.verticalCenter
-                text: root.activePlayer && root.activePlayer.isPlaying ? "󰐊" : "󰏤"
-                color: root.theme.accentPrimary
-                font.pixelSize: 14
-                font.family: root.font
-              }
-
-              Text {
-                anchors.verticalCenter: parent.verticalCenter
-                text: {
-                  if (!root.activePlayer) return "";
-                  const artist = root.activePlayer.trackArtist || "";
-                  const title = root.activePlayer.trackTitle || "";
-                  return artist ? artist + " - " + title : title;
-                }
-                color: root.theme.textPrimary
-                font.pixelSize: 11
-                font.family: root.font
-                elide: Text.ElideRight
-                width: Math.min(implicitWidth, 200)
-              }
-            }
-
-            MouseArea {
-              anchors.fill: parent
-              cursorShape: Qt.PointingHandCursor
-              onClicked: mediaToggleProc.running = true
-            }
-          }
-        }
-
-        // Center section: Window Title (truly centered in bar)
-        Item {
-          anchors.centerIn: parent
-          height: parent.height
-          width: Math.max(0, parent.width - 2 * Math.max(leftSection.width, rightSection.width) - 32)
+          spacing: 10
 
           Text {
-            Accessible.role: Accessible.StaticText
-            Accessible.name: "Active window: " + text
-            text: Hyprland.activeToplevel ? Hyprland.activeToplevel.title : ""
-            color: root.theme.textPrimary
-            font.pixelSize: 13
+            id: archIcon
+            text: "\uf303"
+            color: archArea.containsMouse ? root.theme.accentCyan : root.theme.textSecondary
+            font.pixelSize: 16
             font.family: root.font
-            elide: Text.ElideRight
-            width: Math.min(implicitWidth, parent.width)
-            anchors.centerIn: parent
+
+            MouseArea {
+              id: archArea
+              anchors.fill: parent
+              anchors.margins: -4
+              hoverEnabled: true
+              cursorShape: Qt.PointingHandCursor
+              onClicked: root.toggleDashboard()
+            }
+          }
+
+          Repeater {
+            model: Hyprland.workspaces
+
+            Rectangle {
+              id: wsPill
+              required property var modelData
+              property bool urgentBlink: false
+
+              Layout.preferredWidth: modelData.focused ? 32 : 24
+              Layout.preferredHeight: 24
+              Layout.alignment: Qt.AlignVCenter
+              radius: 12
+              color: modelData.focused ? root.theme.accentPrimary :
+                     modelData.urgent && urgentBlink ? root.theme.accentRed : "transparent"
+              border.color: modelData.focused ? "transparent" : root.theme.bgBorder
+              border.width: 1
+
+              Behavior on color { ColorAnimation { duration: 150 } }
+
+              SequentialAnimation {
+                loops: Animation.Infinite
+                running: wsPill.modelData.urgent && !wsPill.modelData.focused
+                PropertyAction { target: wsPill; property: "urgentBlink"; value: true }
+                PauseAnimation { duration: 500 }
+                PropertyAction { target: wsPill; property: "urgentBlink"; value: false }
+                PauseAnimation { duration: 500 }
+                onStopped: wsPill.urgentBlink = false
+              }
+
+              Text {
+                anchors.centerIn: parent
+                text: wsPill.modelData.id
+                color: wsPill.modelData.focused ? root.theme.bgBase : root.theme.textPrimary
+                font.pixelSize: 11
+                font.family: root.font
+                font.bold: wsPill.modelData.focused
+              }
+
+              MouseArea {
+                anchors.fill: parent
+                onClicked: wsPill.modelData.activate()
+              }
+
+              Behavior on Layout.preferredWidth {
+                NumberAnimation { duration: 150 }
+              }
+            }
           }
         }
 
-        // Right section: System Info + System Tray
+        // ==================== CENTER: Time + Date ====================
         Row {
-          id: rightSection
+          anchors.centerIn: parent
+          spacing: 8
+
+          Text {
+            text: Time.timeString
+            color: root.theme.textPrimary
+            font.pixelSize: 12
+            font.family: root.font
+
+            MouseArea {
+              anchors.fill: parent
+              hoverEnabled: true
+              cursorShape: Qt.PointingHandCursor
+              onClicked: root.toggleDashboard()
+            }
+          }
+
+          Text {
+            text: Time.dateString
+            color: root.theme.textSecondary
+            font.pixelSize: 12
+            font.family: root.font
+
+            MouseArea {
+              anchors.fill: parent
+              hoverEnabled: true
+              cursorShape: Qt.PointingHandCursor
+              onClicked: root.toggleDashboard()
+            }
+          }
+        }
+
+        // ==================== RIGHT: Quick Menu + Battery + Tray ====================
+        RowLayout {
           anchors.right: parent.right
           anchors.verticalCenter: parent.verticalCenter
           spacing: 8
 
-          // Volume
-          Rectangle {
-            height: 24
-            width: volContent.width + 12
-            radius: 12
-            color: root.theme.bgSurface
-
-            Accessible.role: Accessible.StaticText
-            Accessible.name: {
-              const sink = Pipewire.defaultAudioSink;
-              if (!sink || !sink.audio) return "Volume";
-              if (sink.audio.muted) return "Volume: muted";
-              return "Volume: " + Math.round(sink.audio.volume * 100) + "%";
-            }
-
-            Row {
-              id: volContent
-              anchors.centerIn: parent
-              spacing: 6
-
-              Text {
-                anchors.verticalCenter: parent.verticalCenter
-                text: {
-                  const sink = Pipewire.defaultAudioSink;
-                  if (!sink || !sink.audio || sink.audio.muted || sink.audio.volume <= 0) return "󰖁";
-                  if (sink.audio.volume < 0.33) return "󰕿";
-                  if (sink.audio.volume < 0.66) return "󰖀";
-                  return "󰕾";
-                }
-                color: {
-                  const sink = Pipewire.defaultAudioSink;
-                  if (!sink || !sink.audio || sink.audio.muted) return root.theme.textMuted;
-                  return root.theme.accentPrimary;
-                }
-                font.pixelSize: 14
-                font.family: root.font
-              }
-
-              Text {
-                anchors.verticalCenter: parent.verticalCenter
-                text: {
-                  const sink = Pipewire.defaultAudioSink;
-                  if (!sink || !sink.audio) return "–";
-                  if (sink.audio.muted) return "Mute";
-                  return Math.round(sink.audio.volume * 100) + "%";
-                }
-                color: root.theme.textPrimary
-                font.pixelSize: 11
-                font.family: root.font
-              }
-            }
-
-            MouseArea {
-              anchors.fill: parent
-              cursorShape: Qt.PointingHandCursor
-              acceptedButtons: Qt.LeftButton
-              onClicked: audioToggleProc.running = true
-              onWheel: (wheel) => {
-                const sink = Pipewire.defaultAudioSink;
-                if (!sink || !sink.audio) return;
-                const delta = wheel.angleDelta.y > 0 ? 0.05 : -0.05;
-                sink.audio.volume = Math.max(0, Math.min(1.5, sink.audio.volume + delta));
-              }
-            }
-          }
-
-          // Brightness
-          Rectangle {
-            height: 24
-            width: brightContent.width + 12
-            radius: 12
-            color: root.theme.bgSurface
-            visible: brightnessFile.path !== ""
-
-            Accessible.role: Accessible.StaticText
-            Accessible.name: "Brightness: " + Math.round(root.brightnessValue * 100) + "%"
-
-            Row {
-              id: brightContent
-              anchors.centerIn: parent
-              spacing: 6
-
-              Text {
-                anchors.verticalCenter: parent.verticalCenter
-                text: "󰃠"
-                color: root.theme.accentOrange
-                font.pixelSize: 14
-                font.family: root.font
-              }
-
-              Text {
-                anchors.verticalCenter: parent.verticalCenter
-                text: Math.round(root.brightnessValue * 100) + "%"
-                color: root.theme.textPrimary
-                font.pixelSize: 11
-                font.family: root.font
-              }
-            }
-
-            MouseArea {
-              anchors.fill: parent
-              cursorShape: Qt.PointingHandCursor
-              onWheel: (wheel) => {
-                brightnessSetProc.command = wheel.angleDelta.y > 0
-                  ? ["brightnessctl", "set", "5%+"]
-                  : ["brightnessctl", "set", "5%-"];
-                brightnessSetProc.running = true;
-              }
-            }
-          }
-
-          // System Info
-          Row {
-            id: sysInfo
-
-            readonly property color batteryColor: {
-              if (SystemInfo.batteryCharging) return root.theme.accentGreen;
-              if (SystemInfo.batteryLevelRaw > 20) return root.theme.batteryGood;
-              if (SystemInfo.batteryLevelRaw > 10) return root.theme.batteryWarning;
-              return root.theme.batteryCritical;
-            }
-
+          // Battery
+          RowLayout {
             spacing: 4
+            visible: SystemInfo.hasBattery
 
-            // CPU
-            Rectangle {
-              height: 24
-              width: cpuContent.width + 12
-              radius: 12
-              color: root.theme.bgSurface
-              Accessible.role: Accessible.StaticText
-              Accessible.name: "CPU: " + SystemInfo.cpuUsage
-
-              Row {
-                id: cpuContent
-                anchors.centerIn: parent
-                spacing: 6
-
-                Text {
-                  anchors.verticalCenter: parent.verticalCenter
-                  text: "󰻠"
-                  color: root.theme.accentOrange
-                  font.pixelSize: 14
-                  font.family: root.font
-                }
-                Text {
-                  anchors.verticalCenter: parent.verticalCenter
-                  text: SystemInfo.cpuUsage
-                  color: root.theme.textPrimary
-                  font.pixelSize: 11
-                  font.family: root.font
-                }
-              }
+            Text {
+              text: SystemInfo.batteryIcon
+              color: root.theme.textPrimary
+              font.pixelSize: 14
+              font.family: root.font
             }
 
-            // Network
-            Rectangle {
-              height: 24
-              width: netContent.width + 12
-              radius: 12
-              color: root.theme.bgSurface
-              Accessible.role: Accessible.Button
-              Accessible.name: {
-                if (SystemInfo.networkType === "ethernet") return "Network: Ethernet"
-                if (SystemInfo.networkType === "wifi") return "Network: WiFi " + SystemInfo.networkInfo + ", click to toggle"
-                return "Network: Disconnected, click to enable"
-              }
-
-              Row {
-                id: netContent
-                anchors.centerIn: parent
-                spacing: 6
-
-                Text {
-                  anchors.verticalCenter: parent.verticalCenter
-                  text: {
-                    if (SystemInfo.networkType === "ethernet") return "󰈀"
-                    if (SystemInfo.networkType === "wifi") return "󰖩"
-                    return "󰖪"
-                  }
-                  color: SystemInfo.networkType === "disconnected" ? root.theme.textMuted : root.theme.accentGreen
-                  font.pixelSize: 14
-                  font.family: root.font
-                }
-                Text {
-                  anchors.verticalCenter: parent.verticalCenter
-                  text: SystemInfo.networkInfo
-                  color: root.theme.textPrimary
-                  font.pixelSize: 11
-                  font.family: root.font
-                }
-              }
-
-              MouseArea {
-                anchors.fill: parent
-                cursorShape: Qt.PointingHandCursor
-                acceptedButtons: Qt.LeftButton
-                onClicked: connectivityToggleProc.running = true
-              }
-            }
-
-            // Battery
-            Rectangle {
-              height: 24
-              width: battContent.width + 12
-              radius: 12
-              color: root.theme.bgSurface
-              visible: SystemInfo.hasBattery
-              Accessible.role: Accessible.StaticText
-              Accessible.name: "Battery: " + SystemInfo.batteryLevel
-
-              Row {
-                id: battContent
-                anchors.centerIn: parent
-                spacing: 6
-
-                Text {
-                  anchors.verticalCenter: parent.verticalCenter
-                  text: SystemInfo.batteryIcon
-                  color: sysInfo.batteryColor
-                  font.pixelSize: 14
-                  font.family: root.font
-                }
-                Text {
-                  anchors.verticalCenter: parent.verticalCenter
-                  text: SystemInfo.batteryLevel
-                  color: root.theme.textPrimary
-                  font.pixelSize: 11
-                  font.family: root.font
-                }
-              }
-            }
-
-            // Power Profile
-            Rectangle {
-              height: 24
-              width: ppContent.width + 12
-              radius: 12
-              color: root.theme.bgSurface
-              Accessible.role: Accessible.Button
-              Accessible.name: "Power profile: " + SystemInfo.powerProfile + ", click to change"
-
-              Row {
-                id: ppContent
-                anchors.centerIn: parent
-                spacing: 6
-
-                Text {
-                  anchors.verticalCenter: parent.verticalCenter
-                  text: {
-                    if (SystemInfo.powerProfile === "power-saver") return "󰾆"
-                    if (SystemInfo.powerProfile === "performance") return "󰀠"
-                    return "󰓅"
-                  }
-                  color: {
-                    if (SystemInfo.powerProfile === "power-saver") return root.theme.accentGreen
-                    if (SystemInfo.powerProfile === "performance") return root.theme.accentRed
-                    return root.theme.accentPrimary
-                  }
-                  font.pixelSize: 14
-                  font.family: root.font
-                }
-                Text {
-                  anchors.verticalCenter: parent.verticalCenter
-                  text: {
-                    if (SystemInfo.powerProfile === "power-saver") return "Power Save"
-                    if (SystemInfo.powerProfile === "performance") return "Performance"
-                    return "Balanced"
-                  }
-                  color: root.theme.textPrimary
-                  font.pixelSize: 11
-                  font.family: root.font
-                }
-              }
-
-              MouseArea {
-                anchors.fill: parent
-                cursorShape: Qt.PointingHandCursor
-                acceptedButtons: Qt.LeftButton
-                onClicked: powerProfileToggleProc.running = true
-              }
-            }
-
-            // Temperature
-            Rectangle {
-              height: 24
-              width: tempContent.width + 12
-              radius: 12
-              color: root.theme.bgSurface
-              Accessible.role: Accessible.StaticText
-              Accessible.name: "Temperature: " + SystemInfo.temperature
-
-              Row {
-                id: tempContent
-                anchors.centerIn: parent
-                spacing: 6
-
-                Text {
-                  anchors.verticalCenter: parent.verticalCenter
-                  text: "󰔏"
-                  color: root.theme.accentRed
-                  font.pixelSize: 14
-                  font.family: root.font
-                }
-                Text {
-                  anchors.verticalCenter: parent.verticalCenter
-                  text: SystemInfo.temperature
-                  color: root.theme.textPrimary
-                  font.pixelSize: 11
-                  font.family: root.font
-                }
-              }
+            Text {
+              text: SystemInfo.batteryLevel
+              color: root.theme.textPrimary
+              font.pixelSize: 11
+              font.family: root.font
             }
           }
 
           // System Tray
-          // There's an issue that some tray not display correctly.
-          // https://github.com/quickshell-mirror/quickshell/issues/26
-          // https://github.com/quickshell-mirror/quickshell/pull/777
-          Rectangle {
-            implicitHeight: 24
-            implicitWidth: trayIcons.implicitWidth + 4
-            radius: 12
-            color: root.theme.bgSurface
+          RowLayout {
+            id: trayIcons
+            spacing: 4
+            visible: SystemTray.items.values && SystemTray.items.values.length > 0
 
-            RowLayout {
-              id: trayIcons
-              anchors.centerIn: parent
-              spacing: 2
+            Repeater {
+              model: SystemTray.items
 
-              Repeater {
-                model: SystemTray.items
+              MouseArea {
+                id: trayDelegate
+                required property SystemTrayItem modelData
 
-                MouseArea {
-                  id: trayDelegate
-                  required property SystemTrayItem modelData
+                Layout.preferredWidth: 24
+                Layout.preferredHeight: 24
 
-                  Accessible.role: Accessible.Button
-                  Accessible.name: modelData.tooltipTitle || modelData.title || "System tray item"
+                acceptedButtons: Qt.LeftButton | Qt.RightButton | Qt.MiddleButton
 
-                  Layout.preferredWidth: 24
-                  Layout.preferredHeight: 24
-
-                  acceptedButtons: Qt.LeftButton | Qt.RightButton | Qt.MiddleButton
-
-                  onClicked: (mouse) => {
-                    if (mouse.button === Qt.LeftButton) {
-                      modelData.activate()
-                    } else if (mouse.button === Qt.RightButton) {
-                      if (modelData.hasMenu) {
-                        menuAnchor.open()
-                      }
-                    } else if (mouse.button === Qt.MiddleButton) {
-                      modelData.secondaryActivate()
-                    }
+                onClicked: (mouse) => {
+                  if (mouse.button === Qt.LeftButton) {
+                    modelData.activate()
+                  } else if (mouse.button === Qt.RightButton) {
+                    if (modelData.hasMenu) menuAnchor.open()
+                  } else if (mouse.button === Qt.MiddleButton) {
+                    modelData.secondaryActivate()
                   }
+                }
 
-                  IconImage {
-                    anchors.centerIn: parent
-                    source: trayDelegate.modelData.icon
-                    implicitSize: 16
-                  }
+                IconImage {
+                  anchors.centerIn: parent
+                  source: trayDelegate.modelData.icon
+                  implicitSize: 16
+                }
 
-                  QsMenuAnchor {
-                    id: menuAnchor
-                    menu: trayDelegate.modelData.menu
-
-                    anchor.window: trayDelegate.QsWindow.window
-                    anchor.adjustment: PopupAdjustment.Flip
-                    anchor.onAnchoring: {
-                      const window = trayDelegate.QsWindow.window;
-                      const widgetRect = window.contentItem.mapFromItem(
-                        trayDelegate, 0, trayDelegate.height,
-                        trayDelegate.width, trayDelegate.height);
-                      menuAnchor.anchor.rect = widgetRect;
-                    }
+                QsMenuAnchor {
+                  id: menuAnchor
+                  menu: trayDelegate.modelData.menu
+                  anchor.window: trayDelegate.QsWindow.window
+                  anchor.adjustment: PopupAdjustment.Flip
+                  anchor.onAnchoring: {
+                    const window = trayDelegate.QsWindow.window;
+                    const widgetRect = window.contentItem.mapFromItem(
+                      trayDelegate, 0, trayDelegate.height,
+                      trayDelegate.width, trayDelegate.height);
+                    menuAnchor.anchor.rect = widgetRect;
                   }
                 }
               }
-            }
-          }
-
-          // Notification Center
-          Rectangle {
-            height: 24
-            width: 28
-            radius: 12
-            color: notifCenterArea.containsMouse ? root.theme.bgHover : root.theme.bgSurface
-
-            Text {
-              anchors.centerIn: parent
-              text: "󰂜"
-              color: root.theme.accentCyan
-              font.pixelSize: 14
-              font.family: root.font
-            }
-
-            MouseArea {
-              id: notifCenterArea
-              anchors.fill: parent
-              hoverEnabled: true
-              cursorShape: Qt.PointingHandCursor
-              onClicked: notifCenterToggleProc.running = true
-            }
-          }
-
-          // Clipboard
-          Rectangle {
-            height: 24
-            width: 28
-            radius: 12
-            color: clipboardArea.containsMouse ? root.theme.bgHover : root.theme.bgSurface
-
-            Text {
-              anchors.centerIn: parent
-              text: "󰅗"
-              color: root.theme.accentOrange
-              font.pixelSize: 14
-              font.family: root.font
-            }
-
-            MouseArea {
-              id: clipboardArea
-              anchors.fill: parent
-              hoverEnabled: true
-              cursorShape: Qt.PointingHandCursor
-              onClicked: clipboardToggleProc.running = true
             }
           }
         }
       }
 
+    }
+  }
+
+  // ==================== Dashboard Overlay ====================
+  PanelWindow {
+    id: dashboardPopup
+    visible: false
+
+    WlrLayershell.layer: WlrLayer.Overlay
+    WlrLayershell.keyboardFocus: WlrKeyboardFocus.Exclusive
+    WlrLayershell.namespace: "quickshell-dashboard"
+    exclusionMode: ExclusionMode.Ignore
+
+    anchors { top: true; left: true; right: true }
+    exclusiveZone: 0
+    implicitHeight: 612
+    color: "transparent"
+
+    MouseArea {
+      anchors.fill: parent
+      focus: true
+      Keys.onEscapePressed: root.hideDashboard()
+      onClicked: root.hideDashboard()
+    }
+
+    Rectangle {
+      id: dashCard
+      width: 720
+      height: 580
+      radius: 12
+      color: Qt.rgba(root.theme.bgBase.r, root.theme.bgBase.g, root.theme.bgBase.b, 0.95)
+      border.color: Qt.rgba(root.theme.accentPrimary.r, root.theme.accentPrimary.g, root.theme.accentPrimary.b, 0.3)
+      border.width: 1
+      x: (parent.width - width) / 2
+      y: root.dashShown ? 32 : -(height + 60)
+      opacity: root.dashShown ? 1 : 0
+
+      Behavior on y {
+        NumberAnimation {
+          duration: root.dashShown ? 420 : 300
+          easing.type: root.dashShown ? Easing.OutBack : Easing.InCubic
+          easing.overshoot: 0.7
+        }
+      }
+
+      Behavior on opacity {
+        NumberAnimation { duration: 200; easing.type: Easing.OutCubic }
+      }
+
+      Dashboard {
+        anchors.fill: parent
+        anchors.margins: 12
+        theme: root.theme
+        font: root.font
+        onClose: root.hideDashboard()
+      }
     }
   }
 }

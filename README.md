@@ -10,11 +10,13 @@ Arch Linux automated installer ISO with Hyprland, Quickshell Tokyo Night bar, an
 - **ZRAM** — working
 - **SNAPPER** — working
 - **WELCOME & KEYBINDS APP** — working
-- **CLEARING OF CACHE** -building
+- **CLEARING OF CACHE** — working (weekly paccache)
+- **SSD TRIM** — working (weekly fstrim, LUKS-aware)
+- **EXTRA DISK AUTOMOUNT** — working (optional prompt during install)
 
 ## Known Issues
 
-- RMPC have database error
+- None currently known — RMPC database errors were fixed by switching MPD to socket activation
 
 ## Features
 
@@ -23,6 +25,9 @@ Arch Linux automated installer ISO with Hyprland, Quickshell Tokyo Night bar, an
 - **Tokyo Night theme** — dark theme across bar, kitty, fastfetch, fren, btop, zed, hyprlock, SDDM, GRUB + GTK3/GTK4 and Qt (Kvantum) apps
 - **Quickshell bar** — app launcher (SUPER+R), theme switcher (SUPER+T), monitor manager (SUPER+D), dashboard (SUPER+B), power menu (SUPER+ESC), clickable WiFi/BT/brightness/power pills with popups, color-coded CPU, clipboard manager, media player (mpd-mpris), calendar, audio mixer, notification center, network popup, OSD for volume/brightness keys
 - **Welcome app** — keybinds cheat sheet + GitHub link, opens on first login or with SUPER+/ 
+- **Gaming ready** — Steam, Lutris, Heroic, gamemode (`gamemoderun`), ProtonPlus to install Proton/Wine/DXVK tools, Flatseal for sandbox permissions
+- **Maintenance** — weekly paccache (keeps 2 versions), journald capped at 500M (+100M runtime), old logs vacuumed after 14 days
+- **Extra disk automount** — installer can add other disks to fstab: nofail, shows in file manager, user-writable NTFS/FAT
 - **zram** — compressed swap in RAM (half of RAM, zstd), big win on low-RAM machines
 - **BTRFS snapshots** — snapper timeline/cleanup, grub-btrfs boot entries, btrfs-assistant GUI
 - **Powerlevel10k** — preconfigured zsh rice shipped as ~/.rice.zsh, no first-run wizard
@@ -65,7 +70,7 @@ Requires `archiso` on an Arch Linux system. Output: `out/frenos-<YYYY.MM>-x86_64
 
 1. Write ISO to USB: `sudo dd if=frenos-<YYYY.MM>-x86_64.iso of=/dev/sdX bs=4M status=progress && sync`
 2. Boot from USB — `arf-installer` auto-launches
-3. Follow prompts: keyboard layout → disk → swap (none/4GB/8GB) → WiFi (optional) → kernel → hostname/user/password/timezone → confirm wipe
+3. Follow prompts: keyboard layout → disk → swap (none/4GB/8GB) → WiFi (optional) → kernel → hostname/user/password/timezone → extra disks to automount (optional) → confirm wipe
 4. Reboot → SDDM → Hyprland + Quickshell bar (stage2 runs as systemd oneshot on first boot)
 
 ## Custom Commands
@@ -120,13 +125,15 @@ Requires `archiso` on an Arch Linux system. Output: `out/frenos-<YYYY.MM>-x86_64
 ## Post-Install
 
 Stage2 installs:
-- **Official packages:** Hyprland suite, Quickshell, kitty, zed, steam, lutris, discord, mpd/rmpc, firefox, libreoffice, flatpak/bazaar, zram-generator, kvantum + qt6ct, ddcutil, and more
+- **Official packages:** Hyprland suite, Quickshell, kitty, zed, steam, lutris, discord, mpd/rmpc, firefox, libreoffice, flatpak/bazaar, zram-generator, kvantum + qt6ct, ddcutil, gamemode, pacman-contrib, and more
 - **AUR packages:** animu-bin, fren-bin, heroic-games-launcher-bin, tokyonight-gtk-theme-git
+- **Flathub apps:** ProtonPlus (Proton/Wine tool manager) + Flatseal (sandbox permission editor), Flathub remote added automatically
 - **Powerlevel10k:** cloned to ~/powerlevel10k, rice shipped as ~/.rice.zsh (loaded via POWERLEVEL9K_CONFIG_FILE)
 - **Tokyo Night GTK/Qt theming:** Kvantum-Tokyo-Night theme, GTK3 settings.ini (Tokyonight-Dark), GTK4 symlinks into the theme package
 - **zram:** ram/2 zstd compressed swap via zram-generator
+- **Maintenance:** paccache.timer weekly (keeps 2 versions per package), journald capped at 500M system / 100M runtime, fstrim.timer on SSDs (TRIM passes through LUKS)
 - **Firefox:** pre-configured with uBlock Origin and Tokyo Night V3 (xMdb) theme via policies.json
-- **Dotfiles:** hyprland, quickshell (bar/dashboard/OSD/theme switcher), kitty, btop, fastfetch, fren, zed, zsh, rmpc, mpd (user service)
+- **Dotfiles:** hyprland, quickshell (bar/dashboard/OSD/theme switcher), kitty, btop, fastfetch, fren, zed, zsh, rmpc, mpd (socket-activated user service)
 - **BTRFS only:** snapper configs, grub-btrfsd, btrfs-assistant, initial "Clean install" snapshot
 - **Wallpapers:** cloned from [TheCrabevariable/Wallpaper](https://github.com/TheCrabevariable/Wallpaper)
 - **SDDM theme:** flower theme with Tokyo Night colors

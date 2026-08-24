@@ -1,0 +1,44 @@
+#!/bin/bash
+# FrenOS Welcome — keybinds + GitHub link
+# Opens on first boot or with Super + /
+
+MARKER="$HOME/.config/frenos/.welcome-seen"
+mkdir -p "$(dirname "$MARKER")"
+
+KEYBINDS="<b>Programs</b>
+<span foreground='#7aa2f7'>Super + Q</span>        Terminal (kitty)
+<span foreground='#7aa2f7'>Super + E</span>        File manager (fren)
+<span foreground='#7aa2f7'>Super + R</span>        App launcher
+<span foreground='#7aa2f7'>Super + T</span>        Theme switcher
+<span foreground='#7aa2f7'>Super + D</span>        Monitor layout
+<span foreground='#7aa2f7'>Super + Escape</span>    Logout menu
+
+<b>Windows</b>
+<span foreground='#7aa2f7'>Super + C</span>        Close window
+<span foreground='#7aa2f7'>Super + V</span>        Toggle float
+<span foreground='#7aa2f7'>Super + F</span>        Fullscreen
+<span foreground='#7aa2f7'>Super + J</span>        Toggle split
+<span foreground='#7aa2f7'>Super + P</span>        Pseudo tiling
+
+<b>Screenshots</b>
+<span foreground='#7aa2f7'>Super + Z</span>        Region to clipboard
+<span foreground='#7aa2f7'>Super + Shift + Z</span>  Region to file
+<span foreground='#7aa2f7'>Super + Ctrl + Z</span>  Full screen to clipboard
+
+<b>Workspaces</b>
+<span foreground='#7aa2f7'>Super + 1-0</span>      Switch workspace
+<span foreground='#7aa2f7'>Super + Shift + 1-0</span>  Move window to workspace
+<span foreground='#7aa2f7'>Super + S</span>        Toggle scratchpad
+
+<b>Media</b>
+<span foreground='#7aa2f7'>Super + /</span>        This help
+<span foreground='#7aa2f7'>Super + M</span>        Exit Hyprland"
+
+zenity --info \
+  --title="Welcome to FrenOS" \
+  --width=520 --height=640 \
+  --text="$KEYBINDS" \
+  --ok-label="GitHub" 2>/dev/null && \
+  xdg-open "https://github.com/TheCrabevariable/FrenOS" &
+
+touch "$MARKER"
