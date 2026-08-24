@@ -84,7 +84,7 @@ Requires `archiso` on an Arch Linux system. Output: `out/frenos-<YYYY.MM>-x86_64
 
 ## Screenshots
 
-![FrenOS](arf.png)
+<img width="1920" height="1080" alt="image" src="https://github.com/user-attachments/assets/2efcb061-0d66-4ef7-89d7-7b19233fdac6" />
 
 ## Keybinds
 
