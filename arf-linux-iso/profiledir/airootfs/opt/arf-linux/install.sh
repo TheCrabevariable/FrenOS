@@ -238,15 +238,6 @@ stage2() {
     chsh -s "$(which zsh)" "$USERNAME"
     ok "Applied config for zsh and set as default shell"
   fi
-  if [ -f "$DOTFILES/zsh/.rice.zsh" ]; then
-    cp "$DOTFILES/zsh/.rice.zsh" "$USER_HOME/.rice.zsh"
-    chown "$USERNAME:" "$USER_HOME/.rice.zsh" 2>/dev/null || true
-    ok "Applied .rice.zsh (Powerlevel10k config)"
-  fi
-  if [ ! -d "$USER_HOME/powerlevel10k" ]; then
-    info "Cloning powerlevel10k"
-    sudo -u "$USERNAME" git clone --depth 1 https://github.com/romkatv/powerlevel10k.git "$USER_HOME/powerlevel10k"
-  fi
 
   mkdir -p "$USER_HOME/.config/mpd/playlists"
   mkdir -p "$USER_HOME/Music"

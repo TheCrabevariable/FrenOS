@@ -93,6 +93,17 @@ Item {
     }
   }
 
+  // Brightness poll timer (2s when dashboard visible)
+  Timer {
+    interval: 2000
+    running: root.visible
+    repeat: true
+    onTriggered: {
+      if (root.brightnessAvailable) root.refreshDdcBrightness()
+      else bcReadProc.running = true
+    }
+  }
+
   GridLayout {
     id: grid
     anchors.fill: parent
@@ -684,7 +695,7 @@ Item {
                   if (root.brightnessAvailable) {
                     brightnessSetProc.command = ["sh", "-c", root.ddcLoop("ddcutil -b $b setvcp 10 " + Math.round(val) + " 2>/dev/null")];
                   } else {
-                    brightnessSetProc.command = ["sh", "-c", "brightnessctl set " + Math.round(val) + "% 2>/dev/null"];
+                    brightnessSetProc.command = ["sh", "-c", "brightnessctl set " + Math.round(val) + "%"];
                   }
                   brightnessSetProc.running = true;
                   root.brightnessValue = val;

@@ -54,7 +54,7 @@ Singleton {
   // ===== CPU usage (pre-parsed by shell) =====
   Process {
     id: cpuProc
-    command: ["sh", "-c", "awk 'NR==1{n=$2+$3+$4+$5+$6+$7+$8; i=$5+$6} NR==2{m=$2+$3+$4+$5+$6+$7+$8; j=$5+$6; d=m-n; k=j-i; if(d>0)printf \"%.0f\",((d-k)/d)*100; else print 0}' /proc/stat /proc/stat"]
+    command: ["sh", "-c", "awk '{u=$2+$3+$4+$5+$6+$7+$8; i=$5+$6} NR==1{n=u; j=i} END{d=u-n; k=i-j; if(d>0) printf \"%.0f\\n\",((d-k)/d)*100; else print 0}' <(head -1 /proc/stat; sleep 0.5; head -1 /proc/stat)"]
     running: true
     stdout: StdioCollector {
       onStreamFinished: { root.cpuUsage = parseInt(text.trim()) || 0 }
@@ -324,6 +324,14 @@ Singleton {
       powerProfileProc.running = true
       uptimeProc.running = true
     }
+  }
+
+  // Weather refresh (5 min)
+  Timer {
+    interval: 300000
+    running: true
+    repeat: true
+    onTriggered: { weatherProc.running = true }
   }
 
   // Init

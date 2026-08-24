@@ -1,6 +1,6 @@
 # FrenOS package list
 # Reference mirror of the arrays in install.sh (source of truth).
-# Also installed outside these lists: yay-bin, powerlevel10k (git),
+# Also installed outside these lists: yay-bin,
 # Flathub apps (ProtonPlus, Flatseal), SDDM flower theme (git).
 
 # Official packages

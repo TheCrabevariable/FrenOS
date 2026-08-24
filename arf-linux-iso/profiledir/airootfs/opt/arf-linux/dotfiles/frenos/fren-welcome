@@ -9,6 +9,7 @@ KEYBINDS="<b>Programs</b>
 <span foreground='#7aa2f7'>Super + Q</span>        Terminal (kitty)
 <span foreground='#7aa2f7'>Super + E</span>        File manager (fren)
 <span foreground='#7aa2f7'>Super + R</span>        App launcher
+<span foreground='#7aa2f7'>Super + B</span>        Dashboard
 <span foreground='#7aa2f7'>Super + T</span>        Theme switcher
 <span foreground='#7aa2f7'>Super + D</span>        Monitor layout
 <span foreground='#7aa2f7'>Super + Escape</span>    Logout menu
@@ -29,9 +30,17 @@ KEYBINDS="<b>Programs</b>
 <span foreground='#7aa2f7'>Super + 1-0</span>      Switch workspace
 <span foreground='#7aa2f7'>Super + Shift + 1-0</span>  Move window to workspace
 <span foreground='#7aa2f7'>Super + S</span>        Toggle scratchpad
+<span foreground='#7aa2f7'>Super + Shift + S</span>  Send to scratchpad
 
-<b>Media</b>
+<b>Navigation</b>
+<span foreground='#7aa2f7'>Super + Arrows</span>    Move focus
+<span foreground='#7aa2f7'>Super + Scroll</span>    Switch workspace
+<span foreground='#7aa2f7'>Super + Drag</span>      Move window
+<span foreground='#7aa2f7'>Super + Right-drag</span>  Resize window
+
+<b>Media &amp; More</b>
 <span foreground='#7aa2f7'>Super + /</span>        This help
+<span foreground='#7aa2f7'>XF86 keys</span>       Volume / brightness OSD
 <span foreground='#7aa2f7'>Super + M</span>        Exit Hyprland"
 
 zenity --info \
