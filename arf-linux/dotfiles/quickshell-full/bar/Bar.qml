@@ -2,11 +2,13 @@ import Quickshell
 import QtQuick
 import QtQuick.Layouts
 import Quickshell.Hyprland
+import Quickshell.Wayland
 import Quickshell.Widgets
 import Quickshell.Services.SystemTray
 import Quickshell.Io
 import Quickshell.Services.Mpris
 import Quickshell.Services.Pipewire
+import "../dashboard"
 
 Scope {
   id: root
@@ -26,6 +28,15 @@ Scope {
   IpcHandler {
     target: "bar"
     function toggle(): void { root.barVisible = !root.barVisible; }
+  }
+
+  IpcHandler {
+    target: "dashboard"
+    function toggle(): void {
+      root.dashboardVisible = !root.dashboardVisible
+      if (root.dashboardVisible) dashboardPopup.visible = true
+      else dashboardPopup.visible = false
+    }
   }
 
   PwObjectTracker {
@@ -104,11 +115,7 @@ Scope {
 
   Process { id: brightnessSetProc; running: false }
 
-  Process {
-    id: dashboardToggleProc
-    command: ["qs", "ipc", "call", "dashboard", "toggle"]
-    running: false
-  }
+  property bool dashboardVisible: false
 
   Process {
     id: brightnessDiscover
@@ -229,9 +236,12 @@ Scope {
 
       Item {
         id: barContent
-        anchors.fill: parent
+        anchors.left: parent.left
+        anchors.right: parent.right
+        anchors.top: parent.top
         anchors.leftMargin: 10
         anchors.rightMargin: 10
+        height: 32
 
         // ==================== LEFT: Arch + Workspaces ====================
         RowLayout {
@@ -241,6 +251,7 @@ Scope {
           spacing: 10
 
           Text {
+            id: archIcon
             text: "\uf303"
             color: archArea.containsMouse ? root.theme.accentCyan : root.theme.textSecondary
             font.pixelSize: 16
@@ -252,7 +263,10 @@ Scope {
               anchors.margins: -4
               hoverEnabled: true
               cursorShape: Qt.PointingHandCursor
-              onClicked: dashboardToggleProc.running = true
+              onClicked: {
+                root.dashboardVisible = !root.dashboardVisible
+                if (root.dashboardVisible) dashboardPopup.visible = true
+              }
             }
           }
 
@@ -321,7 +335,10 @@ Scope {
               anchors.fill: parent
               hoverEnabled: true
               cursorShape: Qt.PointingHandCursor
-              onClicked: dashboardToggleProc.running = true
+              onClicked: {
+                root.dashboardVisible = !root.dashboardVisible
+                if (root.dashboardVisible) dashboardPopup.visible = true
+              }
             }
           }
 
@@ -335,12 +352,15 @@ Scope {
               anchors.fill: parent
               hoverEnabled: true
               cursorShape: Qt.PointingHandCursor
-              onClicked: dashboardToggleProc.running = true
+              onClicked: {
+                root.dashboardVisible = !root.dashboardVisible
+                if (root.dashboardVisible) dashboardPopup.visible = true
+              }
             }
           }
         }
 
-        // ==================== RIGHT: Battery + Tray ====================
+        // ==================== RIGHT: Quick Menu + Battery + Tray ====================
         RowLayout {
           anchors.right: parent.right
           anchors.verticalCenter: parent.verticalCenter
@@ -416,6 +436,53 @@ Scope {
               }
             }
           }
+        }
+      }
+
+    }
+  }
+
+  // ==================== Dashboard Overlay ====================
+  PanelWindow {
+    id: dashboardPopup
+    visible: root.dashboardVisible
+
+    WlrLayershell.layer: WlrLayer.Overlay
+    WlrLayershell.namespace: "quickshell-dashboard"
+    exclusionMode: ExclusionMode.Ignore
+
+    anchors { top: true; left: true; right: true }
+    exclusiveZone: 0
+    implicitHeight: 612
+    color: "transparent"
+
+    MouseArea {
+      anchors.fill: parent
+      onClicked: {
+        root.dashboardVisible = false
+        dashboardPopup.visible = false
+      }
+    }
+
+    Rectangle {
+      width: 720
+      height: 580
+      radius: 12
+      color: Qt.rgba(root.theme.bgBase.r, root.theme.bgBase.g, root.theme.bgBase.b, 0.95)
+      border.color: Qt.rgba(root.theme.accentPrimary.r, root.theme.accentPrimary.g, root.theme.accentPrimary.b, 0.3)
+      border.width: 1
+      anchors.horizontalCenter: parent.horizontalCenter
+      anchors.top: parent.top
+      anchors.topMargin: 32
+
+      Dashboard {
+        anchors.fill: parent
+        anchors.margins: 12
+        theme: root.theme
+        font: root.font
+        onClose: {
+          root.dashboardVisible = false
+          dashboardPopup.visible = false
         }
       }
     }

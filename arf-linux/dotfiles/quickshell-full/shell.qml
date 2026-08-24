@@ -26,7 +26,6 @@ import "dashboard"
 Scope {
   ThemeSwitcher { id: ts }
   Bar { theme: ts.theme }
-  Dashboard { theme: ts.theme }
   AppLauncher { theme: ts.theme }
   NotificationPopup { theme: ts.theme }
   // WallpaperManager { theme: ts.theme }

@@ -1,50 +1,13 @@
-import Quickshell
-import Quickshell.Io
-import Quickshell.Wayland
 import QtQuick
 import QtQuick.Layouts
 
-PanelWindow {
+Item {
   id: root
-  visible: false
   property var theme: DefaultTheme {}
   property string font: "Hack Nerd Font"
   property int activeTab: 0
 
-  WlrLayershell.layer: WlrLayer.Overlay
-  WlrLayershell.keyboardFocus: WlrKeyboardFocus.OnDemand
-  WlrLayershell.namespace: "quickshell-dashboard"
-  exclusionMode: ExclusionMode.Ignore
-
-  color: "transparent"
-
-  anchors {
-    top: true
-    bottom: true
-    left: true
-    right: true
-  }
-
-  IpcHandler {
-    target: "dashboard"
-    function toggle(): void {
-      root.visible = !root.visible
-    }
-  }
-
-  // Dim overlay background
-  Rectangle {
-    anchors.fill: parent
-    color: theme.bgOverlay
-    focus: true
-
-    Keys.onEscapePressed: root.visible = false
-
-    MouseArea {
-      anchors.fill: parent
-      onClicked: root.visible = false
-    }
-  }
+  signal close()
 
   property var tabs: [
     { icon: "󰋑", label: "Overview" },
@@ -54,29 +17,22 @@ PanelWindow {
     { icon: "󰂜", label: "Notifs" }
   ]
 
-  // Dashboard card
   Rectangle {
-    id: dashboardCard
-      width: 720
-      height: 580
-    radius: 16
+    anchors.fill: parent
+    radius: 12
     color: theme.bgBase
-    border.color: theme.bgBorder
+    border.color: Qt.rgba(theme.accentPrimary.r, theme.accentPrimary.g, theme.accentPrimary.b, 0.3)
     border.width: 1
-
-    x: (root.width - width) / 2
-    anchors.top: parent.top
-    anchors.topMargin: 44
 
     ColumnLayout {
       anchors.fill: parent
-      anchors.margins: 16
+      anchors.margins: 12
       spacing: 0
 
-      // ======== USER HEADER ========
+      // ======== HEADER ========
       RowLayout {
         Layout.fillWidth: true
-        Layout.preferredHeight: 40
+        Layout.preferredHeight: 36
         spacing: 12
 
         ColumnLayout {
@@ -98,21 +54,17 @@ PanelWindow {
           }
         }
 
-        // Spacer
         Item { Layout.fillWidth: true }
 
-        // Close button
         Rectangle {
-          width: 28
-          height: 28
-          radius: 14
+          width: 24; height: 24; radius: 12
           color: closeArea.containsMouse ? theme.bgHover : "transparent"
 
           Text {
             anchors.centerIn: parent
             text: "󰅖"
             color: closeArea.containsMouse ? theme.textPrimary : theme.textMuted
-            font.pixelSize: 14
+            font.pixelSize: 12
             font.family: root.font
           }
 
@@ -121,25 +73,22 @@ PanelWindow {
             anchors.fill: parent
             hoverEnabled: true
             cursorShape: Qt.PointingHandCursor
-            onClicked: root.visible = false
+            onClicked: root.close()
           }
         }
-
-        Item { width: 4; height: 1 }
       }
 
       // ======== TAB BAR ========
       Item {
         Layout.fillWidth: true
-        Layout.preferredHeight: 44
+        Layout.preferredHeight: 36
 
-        // Tab buttons
         Row {
           id: tabRow
           anchors.left: parent.left
           anchors.right: parent.right
           anchors.top: parent.top
-          height: 36
+          height: 32
           spacing: 0
 
           Repeater {
@@ -151,9 +100,10 @@ PanelWindow {
               property bool isActive: root.activeTab === index
 
               width: tabRow.width / root.tabs.length
-              height: 36
+              height: 32
               color: isActive ? theme.accentPrimary :
                      tabArea.containsMouse ? theme.bgHover : "transparent"
+              radius: 6
 
               Row {
                 anchors.centerIn: parent
@@ -174,7 +124,7 @@ PanelWindow {
                   font.pixelSize: 11
                   font.family: root.font
                   font.bold: parent.parent.isActive
-                  visible: dashboardCard.width > 600
+                  visible: root.width > 550
                 }
               }
 
@@ -189,14 +139,13 @@ PanelWindow {
           }
         }
 
-        // Animated indicator
         Rectangle {
           id: tabIndicator
           width: tabRow.width / root.tabs.length
           height: 3
           radius: 2
           color: theme.accentPrimary
-          y: 36
+          y: 32
           x: root.activeTab * width
 
           Behavior on x {
@@ -209,11 +158,10 @@ PanelWindow {
       Rectangle {
         Layout.fillWidth: true
         Layout.preferredHeight: 1
-        Layout.bottomMargin: 12
+        Layout.bottomMargin: 8
         color: theme.bgBorder
       }
 
-      // ======== SWIPEABLE CONTENT ========
       // ======== SWIPEABLE CONTENT ========
       Item {
         Layout.fillWidth: true
@@ -247,9 +195,7 @@ PanelWindow {
               if (dx > 10 || dy > 10) {
                 p._decided = true
                 p._isHorizontal = dx > dy
-                if (!p._isHorizontal) {
-                  mouse.accepted = false
-                }
+                if (!p._isHorizontal) mouse.accepted = false
               }
             }
           }
@@ -257,11 +203,8 @@ PanelWindow {
           onReleased: {
             if (!swipeArea.parent._isHorizontal) return
             const dx = mouse.x - swipeArea.parent._startX
-            if (dx < -60 && root.activeTab < root.tabs.length - 1) {
-              root.activeTab++
-            } else if (dx > 60 && root.activeTab > 0) {
-              root.activeTab--
-            }
+            if (dx < -60 && root.activeTab < root.tabs.length - 1) root.activeTab++
+            else if (dx > 60 && root.activeTab > 0) root.activeTab--
           }
         }
 
