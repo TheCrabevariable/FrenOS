@@ -103,7 +103,7 @@ stage2() {
     bluetui bluez bluez-utils playerctl brightnessctl lm_sensors breeze-cursors cliphist
     pipewire pipewire-pulse wireplumber power-profiles-daemon inotify-tools rsync
     xdg-desktop-portal xdg-desktop-portal-hyprland udiskie wlr-randr bazaar flatpak flatpak-xdg-utils gvfs udisks2 btop xdg-user-dirs libreoffice-fresh firefox cryptsetup
-    zram-generator zenity kvantum lutris qt6ct ddcutil
+    zram-generator zenity kvantum lutris qt6ct ddcutil discord
   )
 
   pacman -S --noconfirm --needed "${OFFICIAL[@]}" os-prober
@@ -126,7 +126,6 @@ stage2() {
     fren-bin
     heroic-games-launcher-bin
     tokyonight-gtk-theme-git
-    vesktop-bin
     wlogout
   )
 
