@@ -160,6 +160,7 @@ stage2() {
   # Enable mpd via socket activation (starts on first connection,
   # so it never launches before ~/.config/mpd/mpd.conf exists)
   sudo -u "$USERNAME" bash -c "
+    mkdir -p ~/.config/systemd/user/sockets.target.wants
     ln -sf /usr/lib/systemd/user/mpd.socket ~/.config/systemd/user/sockets.target.wants/
   "
 
