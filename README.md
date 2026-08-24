@@ -30,7 +30,7 @@ Arch Linux automated installer ISO with Hyprland, Quickshell Tokyo Night bar, an
 - **Extra disk automount** — installer can add other disks to fstab: nofail, shows in file manager, user-writable NTFS/FAT
 - **zram** — compressed swap in RAM (half of RAM, zstd), big win on low-RAM machines
 - **BTRFS snapshots** — snapper timeline/cleanup, grub-btrfs boot entries, btrfs-assistant GUI
-- **Powerlevel10k** — preconfigured zsh rice shipped as ~/.rice.zsh, no first-run wizard
+- **zsh** — custom prompt (user@host dir + exec time), completion, aliases, fastfetch on launch
 - **Hyprland** with Lua config (hyprland.lua) + minimal legacy parser (hyprland.conf)
 - **BTRFS** filesystem with zstd compression (ext4 also available)
 - **WiFi config** — prompted during install, persisted to installed system
@@ -128,7 +128,7 @@ Stage2 installs:
 - **Official packages:** Hyprland suite, Quickshell, kitty, zed, steam, lutris, discord, mpd/rmpc, firefox, libreoffice, flatpak/bazaar, zram-generator, kvantum + qt6ct, ddcutil, gamemode, pacman-contrib, and more
 - **AUR packages:** animu-bin, fren-bin, heroic-games-launcher-bin, tokyonight-gtk-theme-git
 - **Flathub apps:** ProtonPlus (Proton/Wine tool manager) + Flatseal (sandbox permission editor), Flathub remote added automatically
-- **Powerlevel10k:** cloned to ~/powerlevel10k, rice shipped as ~/.rice.zsh (loaded via POWERLEVEL9K_CONFIG_FILE)
+- **zsh:** custom two-line prompt with command timing, set as default shell
 - **Tokyo Night GTK/Qt theming:** Kvantum-Tokyo-Night theme, GTK3 settings.ini (Tokyonight-Dark), GTK4 symlinks into the theme package
 - **zram:** ram/2 zstd compressed swap via zram-generator
 - **Maintenance:** paccache.timer weekly (keeps 2 versions per package), journald capped at 500M system / 100M runtime, fstrim.timer on SSDs (TRIM passes through LUKS)
