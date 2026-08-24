@@ -285,10 +285,24 @@ while true; do
   # candidates: partitions with a filesystem, not mounted, not the install disk
   mapfile -t EXTRA_CAND < <(lsblk -rpno PATH,FSTYPE,MOUNTPOINT 2>/dev/null | awk -v d="$DISK" \
     '$2 != "" && $2 != "swap" && $2 != "crypto_LUKS" && $3 == "" && index($1, d) != 1 {print $1}')
-  [ ${#EXTRA_CAND[@]} -eq 0 ] && break
 
-  EXTRA_CHOICES=("Done — no more disks")
+  # hide ones we've already added
+  FRESH_CAND=()
   for part in "${EXTRA_CAND[@]}"; do
+    skip=false
+    for done_part in "${EXTRA_ADDED[@]:-}"; do
+      [ "$part" = "$done_part" ] && skip=true && break
+    done
+    $skip || FRESH_CAND+=("$part")
+  done
+
+  if [ ${#FRESH_CAND[@]} -eq 0 ]; then
+    [ ${#EXTRA_ADDED[@]:-} -gt 0 ] && ok "All candidate disks handled"
+    break
+  fi
+
+  EXTRA_CHOICES=("Done — finish and continue install")
+  for part in "${FRESH_CAND[@]}"; do
     p_fs=$(lsblk -drno FSTYPE "$part" 2>/dev/null)
     p_size=$(lsblk -drno SIZE "$part" 2>/dev/null)
     p_label=$(lsblk -drno LABEL "$part" 2>/dev/null)
@@ -322,6 +336,7 @@ while true; do
     *)      EXTRA_LINE="UUID=$EXTRA_UUID /$MP_NAME $EXTRA_Fstype defaults,nofail,x-gvfs-show 0 0" ;;
   esac
   echo "$EXTRA_LINE" >> /mnt/etc/fstab
+  EXTRA_ADDED+=("$EXTRA_PART")
   ok "Will automount $EXTRA_PART at /$MP_NAME"
 done
 
