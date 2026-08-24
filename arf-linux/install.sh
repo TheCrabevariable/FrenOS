@@ -181,8 +181,8 @@ stage2() {
     ln -sf /usr/lib/systemd/user/mpd.socket ~/.config/systemd/user/sockets.target.wants/
   "
 
-  # zram config
-  if [ -f "$DOTFILES/zram/zram-generator.conf" ]; then
+  # zram config (opt-out via ZRAM_CHOICE=no from installer; default on)
+  if [ "${ZRAM_CHOICE:-yes}" != "no" ] && [ -f "$DOTFILES/zram/zram-generator.conf" ]; then
     mkdir -p /etc/systemd/zram-generator.conf.d
     cp "$DOTFILES/zram/zram-generator.conf" /etc/systemd/zram-generator.conf.d/00-override.conf
     ok "Applied zram config (compressed swap)"

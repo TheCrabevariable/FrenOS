@@ -103,7 +103,7 @@ stage2() {
     bluetui bluez bluez-utils playerctl brightnessctl lm_sensors breeze-cursors cliphist
     pipewire pipewire-pulse wireplumber power-profiles-daemon inotify-tools rsync
     xdg-desktop-portal xdg-desktop-portal-hyprland udiskie wlr-randr bazaar flatpak flatpak-xdg-utils gvfs udisks2 btop xdg-user-dirs libreoffice-fresh firefox cryptsetup
-    zram-generator zenity kvantum lutris qt6ct ddcutil discord
+    zram-generator zenity kvantum lutris qt6ct ddcutil discord pacman-contrib gamemode
   )
 
   pacman -S --noconfirm --needed "${OFFICIAL[@]}" os-prober
@@ -140,6 +140,19 @@ stage2() {
 
   rm -f /etc/sudoers.d/99-arf
 
+  # Flatpak apps (ProtonPlus: Proton/Wine tool manager, Flatseal: permission editor)
+  if command -v flatpak &>/dev/null; then
+    info "Setting up Flathub remote"
+    flatpak remote-add --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo 2>/dev/null || true
+    for fp_app in com.vysp3r.ProtonPlus com.github.tchx84.Flatseal; do
+      if flatpak install -y --noninteractive flathub "$fp_app"; then
+        ok "Installed Flatpak app: $fp_app"
+      else
+        info "Flatpak app failed (non-fatal, retry via Bazaar): $fp_app"
+      fi
+    done
+  fi
+
   # Regenerate initramfs after GPU drivers + LUKS (done later in stage2)
   # mkinitcpio -P is called after LUKS config below
 
@@ -148,6 +161,10 @@ stage2() {
   systemctl enable bluetooth
   systemctl enable power-profiles-daemon
   systemctl enable NetworkManager
+  # pacman cache: weekly cleanup keeping 2 versions per pkg
+  systemctl enable paccache.timer 2>/dev/null || true
+  mkdir -p /etc/systemd/system/paccache.service.d
+  printf '[Service]\nEnvironment=PACCACHE_ARGS=-rk2\n' > /etc/systemd/system/paccache.service.d/frenos.conf
   sudo -u "$USERNAME" bash -c "
     mkdir -p ~/.config/systemd/user/default.target.wants
     ln -sf /usr/lib/systemd/user/pipewire.service ~/.config/systemd/user/default.target.wants/
@@ -157,9 +174,11 @@ stage2() {
     ln -sf /usr/lib/systemd/user/mpd-mpris.service ~/.config/systemd/user/default.target.wants/
   "
 
-  # Enable mpd (user service)
+  # Enable mpd via socket activation (starts on first connection,
+  # so it never launches before ~/.config/mpd/mpd.conf exists)
   sudo -u "$USERNAME" bash -c "
-    ln -sf /usr/lib/systemd/user/mpd.service ~/.config/systemd/user/default.target.wants/
+    mkdir -p ~/.config/systemd/user/sockets.target.wants
+    ln -sf /usr/lib/systemd/user/mpd.socket ~/.config/systemd/user/sockets.target.wants/
   "
 
   # zram config
@@ -167,6 +186,14 @@ stage2() {
     mkdir -p /etc/systemd/zram-generator.conf.d
     cp "$DOTFILES/zram/zram-generator.conf" /etc/systemd/zram-generator.conf.d/00-override.conf
     ok "Applied zram config (compressed swap)"
+  fi
+
+  # journald size limits + one-time vacuum of old logs
+  if [ -f "$DOTFILES/journald/journald.conf" ]; then
+    mkdir -p /etc/systemd/journald.conf.d
+    cp "$DOTFILES/journald/journald.conf" /etc/systemd/journald.conf.d/00-frenos.conf
+    journalctl --vacuum-time=14d >/dev/null 2>&1 || true
+    ok "Applied journald limits (500M system / 100M runtime)"
   fi
 
   # ── Dotfiles ──────────────────────────────────────────────────
@@ -179,7 +206,7 @@ stage2() {
   for dir in "$DOTFILES"/*/; do
     app="$(basename "$dir")"
     case "$app" in
-      dunst|firefox|frenos) continue ;;
+      zram|journald|dunst|firefox|frenos) continue ;;
       quickshell-full) app="quickshell" ;;
     esac
     target="$USER_HOME/.config/$app"
@@ -209,6 +236,15 @@ stage2() {
   mkdir -p "$USER_HOME/Music"
   chown -R "$USERNAME:" "$USER_HOME/.config/mpd" 2>/dev/null || true
   chown -R "$USERNAME:" "$USER_HOME/Music" 2>/dev/null || true
+
+  # Restart user services if a session is already up (first-boot run:
+  # services may have started before dotfiles/config landed)
+  USER_UID=$(id -u "$USERNAME")
+  if [ -d "/run/user/$USER_UID" ]; then
+    sudo -u "$USERNAME" XDG_RUNTIME_DIR="/run/user/$USER_UID" systemctl --user daemon-reload 2>/dev/null || true
+    sudo -u "$USERNAME" XDG_RUNTIME_DIR="/run/user/$USER_UID" systemctl --user try-restart mpd.service mpd-mpris.service 2>/dev/null || true
+    ok "Restarted user services (session active)"
+  fi
 
   # Install update-fos script
   if [ -f "$DOTFILES/frenos/update-fos" ]; then

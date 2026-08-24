@@ -75,6 +75,7 @@ ok "Mirrorlist optimized"
 FS_CHOICE=$(gum choose "btrfs" "ext4" --header "Filesystem")
 SUBVOLUMES=""
 SWAP_CHOICE=$(gum choose "none" "4GB" "8GB" --header "Swap size")
+ZRAM_CHOICE=$(gum choose "yes" "no" --header "Enable zram? (compressed swap in RAM, half your RAM)" --selected "yes")
 ENCRYPT_CHOICE=$(gum choose "no" "yes" --header "Encrypt root partition with LUKS?" --selected "no")
 PARALLEL_DL=$(gum choose "1" "2" "3" "4" --header "Parallel downloads (pacman)")
 
@@ -402,6 +403,7 @@ echo "USERNAME=${USERNAME}" > /mnt/etc/arf-linux.env
 echo "PARALLEL_DL=${PARALLEL_DL}" >> /mnt/etc/arf-linux.env
 echo "FS_CHOICE=${FS_CHOICE}" >> /mnt/etc/arf-linux.env
 echo "ENCRYPTED=${ENCRYPT_CHOICE}" >> /mnt/etc/arf-linux.env
+echo "ZRAM_CHOICE=${ZRAM_CHOICE}" >> /mnt/etc/arf-linux.env
 [ -n "$LUKS_UUID" ] && echo "LUKS_UUID=${LUKS_UUID}" >> /mnt/etc/arf-linux.env
 
 cat > /mnt/etc/systemd/system/arf-stage2.service <<SERVICE
@@ -442,7 +444,7 @@ fi
 info "Running stage2 in chroot..."
 cp /etc/resolv.conf /mnt/etc/resolv.conf 2>/dev/null || true
 if arch-chroot /mnt bash -c "
-  export USERNAME=$USERNAME HOME=/home/$USERNAME PARALLEL_DL=$PARALLEL_DL FS_CHOICE=$FS_CHOICE ENCRYPTED=$ENCRYPT_CHOICE LUKS_UUID=$LUKS_UUID
+  export USERNAME=$USERNAME HOME=/home/$USERNAME PARALLEL_DL=$PARALLEL_DL FS_CHOICE=$FS_CHOICE ENCRYPTED=$ENCRYPT_CHOICE LUKS_UUID=$LUKS_UUID ZRAM_CHOICE=$ZRAM_CHOICE
   bash /home/$USERNAME/arf-linux/install.sh --stage2
   STAGE2_EXIT=\$?
   if [ \$STAGE2_EXIT -eq 0 ]; then

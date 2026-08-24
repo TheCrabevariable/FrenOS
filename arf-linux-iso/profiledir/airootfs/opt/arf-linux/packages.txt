@@ -1,4 +1,10 @@
+# FrenOS package list
+# Reference mirror of the arrays in install.sh (source of truth).
+# Also installed outside these lists: yay-bin, powerlevel10k (git),
+# Flathub apps (ProtonPlus, Flatseal), SDDM flower theme (git).
+
 # Official packages
+os-prober
 hyprland
 hypridle
 hyprlock
@@ -47,24 +53,32 @@ wireplumber
 power-profiles-daemon
 inotify-tools
 rsync
-cryptsetup
 xdg-desktop-portal
 xdg-desktop-portal-hyprland
-gvfs
-udisks2
 udiskie
 wlr-randr
-os-prober
 bazaar
-libreoffice-fresh
-vesktop
-firefox
 flatpak
 flatpak-xdg-utils
+gvfs
+udisks2
+btop
 xdg-user-dirs
+libreoffice-fresh
+firefox
+cryptsetup
+zram-generator
+zenity
+kvantum
+lutris
+qt6ct
+ddcutil
+discord
+pacman-contrib
+gamemode
 
 # AUR packages
 animu-bin
 fren-bin
 heroic-games-launcher-bin
-wlogout
+tokyonight-gtk-theme-git
