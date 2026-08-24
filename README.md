@@ -120,8 +120,8 @@ Requires `archiso` on an Arch Linux system. Output: `out/frenos-<YYYY.MM>-x86_64
 ## Post-Install
 
 Stage2 installs:
-- **Official packages:** Hyprland suite, Quickshell, kitty, zed, steam, lutris, mpd/rmpc, firefox, libreoffice, flatpak/bazaar, zram-generator, kvantum + qt6ct, and more
-- **AUR packages:** animu-bin, fren-bin, heroic-games-launcher-bin, vesktop-bin, wlogout, tokyonight-gtk-theme-git
+- **Official packages:** Hyprland suite, Quickshell, kitty, zed, steam, lutris, discord, mpd/rmpc, firefox, libreoffice, flatpak/bazaar, zram-generator, kvantum + qt6ct, ddcutil, and more
+- **AUR packages:** animu-bin, fren-bin, heroic-games-launcher-bin, tokyonight-gtk-theme-git
 - **Powerlevel10k:** cloned to ~/powerlevel10k, rice shipped as ~/.rice.zsh (loaded via POWERLEVEL9K_CONFIG_FILE)
 - **Tokyo Night GTK/Qt theming:** Kvantum-Tokyo-Night theme, GTK3 settings.ini (Tokyonight-Dark), GTK4 symlinks into the theme package
 - **zram:** ram/2 zstd compressed swap via zram-generator
