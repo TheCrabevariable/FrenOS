@@ -277,6 +277,54 @@ arch-chroot /mnt useradd -m -G wheel,video,input -s /bin/zsh "$USERNAME"
 echo "$USERNAME:$PASSWORD" | arch-chroot /mnt chpasswd
 echo "%wheel ALL=(ALL:ALL) ALL" > /mnt/etc/sudoers.d/10-wheel
 
+# ── Optional: automount extra disk(s) at boot ─────────────────
+USER_UID=$(arch-chroot /mnt id -u "$USERNAME" 2>/dev/null || echo 1000)
+USER_GID=$(arch-chroot /mnt id -g "$USERNAME" 2>/dev/null || echo 1000)
+
+while true; do
+  # candidates: partitions with a filesystem, not mounted, not the install disk
+  mapfile -t EXTRA_CAND < <(lsblk -rpno PATH,FSTYPE,MOUNTPOINT 2>/dev/null | awk -v d="$DISK" \
+    '$2 != "" && $2 != "swap" && $2 != "crypto_LUKS" && $3 == "" && index($1, d) != 1 {print $1}')
+  [ ${#EXTRA_CAND[@]} -eq 0 ] && break
+
+  EXTRA_CHOICES=("Done — no more disks")
+  for part in "${EXTRA_CAND[@]}"; do
+    p_fs=$(lsblk -drno FSTYPE "$part" 2>/dev/null)
+    p_size=$(lsblk -drno SIZE "$part" 2>/dev/null)
+    p_label=$(lsblk -drno LABEL "$part" 2>/dev/null)
+    [ -n "$p_label" ] || p_label="unlabeled"
+    EXTRA_CHOICES+=("$part [$p_fs, $p_size, \"$p_label\"]")
+  done
+
+  EXTRA_PICK=$(gum choose "${EXTRA_CHOICES[@]}" \
+    --header "Automount another disk at boot? (pick one, or Done)" --height 15)
+  [[ "$EXTRA_PICK" == Done* ]] && break
+
+  EXTRA_PART="${EXTRA_PICK%% *}"
+  EXTRA_Fstype=$(lsblk -drno FSTYPE "$EXTRA_PART" 2>/dev/null)
+  EXTRA_UUID=$(blkid -s UUID -o value "$EXTRA_PART" 2>/dev/null)
+  [ -z "$EXTRA_UUID" ] && { info "No UUID for $EXTRA_PART, skipping"; continue; }
+
+  MP_NAME=$(lsblk -drno LABEL "$EXTRA_PART" 2>/dev/null | tr -c 'a-zA-Z0-9._-' '-')
+  MP_NAME=${MP_NAME#-}; MP_NAME=${MP_NAME%-}
+  [ -n "$MP_NAME" ] || MP_NAME="data-${EXTRA_UUID:0:4}"
+  while [ -e "/mnt/$MP_NAME" ]; do
+    MP_NAME="$MP_NAME-${EXTRA_UUID:0:4}"
+  done
+  mkdir -p "/mnt/$MP_NAME"
+
+  case "$EXTRA_Fstype" in
+    ext4)   EXTRA_LINE="UUID=$EXTRA_UUID /$MP_NAME ext4 defaults,noatime,nofail,x-gvfs-show 0 2" ;;
+    btrfs)  EXTRA_LINE="UUID=$EXTRA_UUID /$MP_NAME btrfs defaults,noatime,nofail,x-gvfs-show 0 0" ;;
+    xfs|f2fs) EXTRA_LINE="UUID=$EXTRA_UUID /$MP_NAME $EXTRA_Fstype defaults,noatime,nofail,x-gvfs-show 0 0" ;;
+    vfat|exfat) EXTRA_LINE="UUID=$EXTRA_UUID /$MP_NAME $EXTRA_Fstype uid=$USER_UID,gid=$USER_GID,umask=022,nofail,x-gvfs-show 0 0" ;;
+    ntfs*)  EXTRA_LINE="UUID=$EXTRA_UUID /$MP_NAME ntfs3 uid=$USER_UID,gid=$USER_GID,umask=022,nofail,x-gvfs-show 0 0" ;;
+    *)      EXTRA_LINE="UUID=$EXTRA_UUID /$MP_NAME $EXTRA_Fstype defaults,nofail,x-gvfs-show 0 0" ;;
+  esac
+  echo "$EXTRA_LINE" >> /mnt/etc/fstab
+  ok "Will automount $EXTRA_PART at /$MP_NAME"
+done
+
 arch-chroot /mnt grub-install --target=x86_64-efi --efi-directory=/boot --bootloader-id=GRUB
 
 # ── LUKS boot config (must happen BEFORE grub-mkconfig + mkinitcpio) ──
