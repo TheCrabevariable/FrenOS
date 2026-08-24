@@ -148,7 +148,10 @@ stage2() {
   systemctl enable bluetooth
   systemctl enable power-profiles-daemon
   systemctl enable NetworkManager
+  # pacman cache: weekly cleanup keeping 2 versions per pkg
   systemctl enable paccache.timer 2>/dev/null || true
+  mkdir -p /etc/systemd/system/paccache.service.d
+  printf '[Service]\nEnvironment=PACCACHE_ARGS=-rk2\n' > /etc/systemd/system/paccache.service.d/frenos.conf
   sudo -u "$USERNAME" bash -c "
     mkdir -p ~/.config/systemd/user/default.target.wants
     ln -sf /usr/lib/systemd/user/pipewire.service ~/.config/systemd/user/default.target.wants/
