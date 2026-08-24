@@ -111,12 +111,6 @@ Scope {
 
   Process { id: brightnessSetProc; running: false }
 
-  Process {
-    id: sessionToggleProc
-    command: ["qs", "ipc", "call", "session", "toggle"]
-    running: false
-  }
-
   property bool dashShown: false
 
   function showDashboard() {
@@ -380,23 +374,6 @@ Scope {
           anchors.right: parent.right
           anchors.verticalCenter: parent.verticalCenter
           spacing: 8
-
-          // Session / power menu
-          Text {
-            text: "\uf011"
-            color: powerArea.containsMouse ? root.theme.accentRed : root.theme.textSecondary
-            font.pixelSize: 15
-            font.family: root.font
-
-            MouseArea {
-              id: powerArea
-              anchors.fill: parent
-              anchors.margins: -4
-              hoverEnabled: true
-              cursorShape: Qt.PointingHandCursor
-              onClicked: sessionToggleProc.running = true
-            }
-          }
 
           // Battery
           RowLayout {
