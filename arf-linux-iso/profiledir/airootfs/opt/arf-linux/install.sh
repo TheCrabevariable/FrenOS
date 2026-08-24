@@ -41,8 +41,36 @@ stage1() {
   ok "Stage 1 manual — base install must be done manually"
 }
 
+# Flatpak apps (ProtonPlus: Proton/Wine tool manager, Flatseal: permission editor)
+# Runs on the booted system only — flatpak/bwrap breaks inside the chroot.
+run_flatpak_apps() {
+  command -v flatpak &>/dev/null || return 0
+  [ -d /run/archiso ] && return 0
+  info "Setting up Flathub remote"
+  flatpak remote-add --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo 2>/dev/null || true
+  for fp_app in com.vysp3r.ProtonPlus com.github.tchx84.Flatseal; do
+    if flatpak install -y --noninteractive flathub "$fp_app"; then
+      ok "Installed Flatpak app: $fp_app"
+    else
+      info "Flatpak app failed (non-fatal, retry via Bazaar): $fp_app"
+    fi
+  done
+}
+
 # ── Stage 2: First boot (pkg install) ──────────────────────────
 stage2() {
+  # If a previous (chroot) run completed fully, this is the one-time
+  # first-boot pass: just finish what can't run inside the chroot.
+  if [ -f /var/lib/frenos/stage2-complete ]; then
+    info "Stage 2 already done — running post-install pass (Flathub apps)"
+    run_flatpak_apps
+    rm -f /etc/systemd/system/multi-user.target.wants/arf-stage2.service
+    rm -f /etc/systemd/system/arf-stage2.service
+    rm -f /etc/arf-linux.env
+    ok "Post-install pass complete!"
+    return
+  fi
+
   info "Stage 2: Installing packages"
 
   # Tweak pacman.conf
@@ -103,7 +131,7 @@ stage2() {
     hyprland hypridle hyprlock hyprpaper hyprshot hyprpolkitagent hyprpicker
     zed steam kitty fastfetch chafa imagemagick rmpc mpd mpd-mpris networkmanager zsh python nano
     quickshell ttf-hack-nerd ttf-nerd-fonts-symbols noto-fonts-emoji sddm qt5-graphicaleffects qt5-quickcontrols2 qt5-svg opencode gnome-disk-utility imv mpv pavucontrol yt-dlp
-    bluetui bluez bluez-utils playerctl brightnessctl lm_sensors breeze-cursors cliphist
+    bluetui bluez bluez-utils playerctl brightnessctl lm_sensors breeze-cursors cliphist qt6-5compat
     pipewire pipewire-pulse wireplumber power-profiles-daemon inotify-tools rsync
     xdg-desktop-portal xdg-desktop-portal-hyprland udiskie wlr-randr bazaar flatpak flatpak-xdg-utils gvfs udisks2 btop xdg-user-dirs libreoffice-fresh firefox cryptsetup
     zram-generator zenity kvantum lutris qt6ct ddcutil discord pacman-contrib gamemode
@@ -143,20 +171,7 @@ stage2() {
 
   rm -f /etc/sudoers.d/99-arf
 
-  # Flatpak apps (ProtonPlus: Proton/Wine tool manager, Flatseal: permission editor)
-  # First boot only — flatpak/bwrap breaks inside the chroot, and the big
-  # runtime download looks hung there. /run/archiso only exists on the ISO.
-  if command -v flatpak &>/dev/null && [ ! -d /run/archiso ]; then
-    info "Setting up Flathub remote"
-    flatpak remote-add --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo 2>/dev/null || true
-    for fp_app in com.vysp3r.ProtonPlus com.github.tchx84.Flatseal; do
-      if flatpak install -y --noninteractive flathub "$fp_app"; then
-        ok "Installed Flatpak app: $fp_app"
-      else
-        info "Flatpak app failed (non-fatal, retry via Bazaar): $fp_app"
-      fi
-    done
-  fi
+  # Flatpak apps — deferred to first boot (see run_flatpak_apps)
 
   # Regenerate initramfs after GPU drivers + LUKS (done later in stage2)
   # mkinitcpio -P is called after LUKS config below
@@ -480,7 +495,9 @@ SNAPPER
     ok "Snapper configured, initial snapshot created"
   fi
 
-  ok "Stage 2 complete!"
+  mkdir -p /var/lib/frenos
+  touch /var/lib/frenos/stage2-complete
+  ok "Stage 2 complete! (post-install pass will run on first boot)"
 }
 
 # ── Main ───────────────────────────────────────────────────────
