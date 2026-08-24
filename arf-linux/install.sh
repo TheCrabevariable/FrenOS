@@ -179,7 +179,7 @@ stage2() {
   for dir in "$DOTFILES"/*/; do
     app="$(basename "$dir")"
     case "$app" in
-      quickshell-patch|dunst|firefox|frenos) continue ;;
+      dunst|firefox|frenos) continue ;;
       quickshell-full) app="quickshell" ;;
     esac
     target="$USER_HOME/.config/$app"
