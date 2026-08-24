@@ -47,6 +47,7 @@ brightnessctl
 lm_sensors
 breeze-cursors
 cliphist
+qt6-5compat
 pipewire
 pipewire-pulse
 wireplumber

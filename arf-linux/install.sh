@@ -103,7 +103,7 @@ stage2() {
     hyprland hypridle hyprlock hyprpaper hyprshot hyprpolkitagent hyprpicker
     zed steam kitty fastfetch chafa imagemagick rmpc mpd mpd-mpris networkmanager zsh python nano
     quickshell ttf-hack-nerd ttf-nerd-fonts-symbols noto-fonts-emoji sddm qt5-graphicaleffects qt5-quickcontrols2 qt5-svg opencode gnome-disk-utility imv mpv pavucontrol yt-dlp
-    bluetui bluez bluez-utils playerctl brightnessctl lm_sensors breeze-cursors cliphist
+    bluetui bluez bluez-utils playerctl brightnessctl lm_sensors breeze-cursors cliphist qt6-5compat
     pipewire pipewire-pulse wireplumber power-profiles-daemon inotify-tools rsync
     xdg-desktop-portal xdg-desktop-portal-hyprland udiskie wlr-randr bazaar flatpak flatpak-xdg-utils gvfs udisks2 btop xdg-user-dirs libreoffice-fresh firefox cryptsetup
     zram-generator zenity kvantum lutris qt6ct ddcutil discord pacman-contrib gamemode
