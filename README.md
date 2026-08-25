@@ -24,7 +24,7 @@ FrenOS is a flavour of Arch Linux that i made with what i like about it, and i b
 
 - **Automated install** — interactive stage1 with keyboard layout, disk selection, swap size, kernel choice, user setup, timezone
 - **Single reboot** — stage2 can run in chroot during install, or on first boot via systemd oneshot
-- **Tokyo Night theme** — dark theme across bar, kitty, fastfetch, fren, btop, zed, hyprlock, SDDM, GRUB + GTK3/GTK4 and Qt (Kvantum) apps
+- **Tokyo Night theme** — dark theme across bar, kitty, fastfetch, fren, btop, zed, GTK3/GTK4 and Qt (Kvantum) apps; theme switcher (SUPER+T) toggles wallpaper, GTK/Qt theme, and Hypr border colors live
 - **Quickshell bar** — app launcher (SUPER+R), theme switcher (SUPER+T), monitor manager (SUPER+D), dashboard (SUPER+B), power menu (SUPER+ESC), clickable WiFi/BT/brightness/power pills with popups, color-coded CPU, clipboard manager, media player (mpd-mpris), calendar, audio mixer, notification center, network popup, OSD for volume/brightness keys
 - **Welcome app** — keybinds cheat sheet + GitHub link, opens on first login or with SUPER+/ 
 - **Gaming ready** — Steam, Lutris, Heroic, gamemode (`gamemoderun`), ProtonPlus to install Proton/Wine/DXVK tools, Flatseal for sandbox permissions
@@ -131,12 +131,13 @@ Stage2 installs:
 - **AUR packages:** animu-bin, fren-bin, heroic-games-launcher-bin, tokyonight-gtk-theme-git
 - **Flathub apps:** ProtonPlus (Proton/Wine tool manager) + Flatseal (sandbox permission editor), Flathub remote added automatically
 - **zsh:** custom two-line prompt with command timing, set as default shell
-- **Tokyo Night GTK/Qt theming:** Kvantum-Tokyo-Night theme, GTK3 settings.ini (Tokyonight-Dark), GTK4 symlinks into the theme package
+- **Tokyo Night GTK/Qt theming:** Kvantum-Tokyo-Night theme, GTK3 settings.ini (Tokyonight-Dark), GTK4 symlinks into the theme package; theme switcher can toggle at runtime
+- **hyprlock.conf:** managed directly in dotfiles (theme switcher copies wallpaper only)
 - **zram:** ram/2 zstd compressed swap via zram-generator
 - **Maintenance:** paccache.timer weekly (keeps 2 versions per package), journald capped at 500M system / 100M runtime, fstrim.timer on SSDs (TRIM passes through LUKS)
 - **Firefox:** pre-configured with uBlock Origin and Tokyo Night V3 (xMdb) theme via policies.json
 - **Dotfiles:** hyprland, quickshell (bar/dashboard/OSD/theme switcher), kitty, btop, fastfetch, fren, zed, zsh, rmpc, mpd (socket-activated user service)
 - **BTRFS only:** snapper configs, grub-btrfsd, btrfs-assistant, initial "Clean install" snapshot
 - **Wallpapers:** cloned from [TheCrabevariable/Wallpaper](https://github.com/TheCrabevariable/Wallpaper)
-- **SDDM theme:** flower theme with Tokyo Night colors
+- **SDDM theme:** flower theme with Tokyo Night colors (set at install, not managed by theme switcher)
 - **fren-welcome:** installed to /usr/local/bin — keybinds cheat sheet on first login or SUPER+/
