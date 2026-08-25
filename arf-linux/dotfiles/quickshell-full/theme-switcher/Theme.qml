@@ -77,19 +77,17 @@ Singleton {
     }
 
     function applyHyprlandBorders(t) {
-        var active = hexToRgba(t.accentPrimary) + " " + hexToRgba(t.accentCyan) + " 45deg";
+        var active = hexToRgba(t.accentPrimary);
         var inactive = hexToRgba(t.bgBorder);
         hyprlandProc.command = ["sh", "-c",
-            'printf "general {\\n    col.active_border = ' + active + '\\n    col.inactive_border = ' + inactive + '\\n}\\n"' +
-            ' > "$HOME/.config/hypr/theme-borders.conf" && ' +
-            'hyprctl keyword general:col.active_border "' + active + '" && ' +
-            'hyprctl keyword general:col.inactive_border "' + inactive + '"'
+            'hyprctl eval \'hl.config({ general = { col = { active_border = "' + active + '", inactive_border = "' + inactive + '" } } })\''
         ];
         hyprlandProc.running = true;
     }
 
     function applyTheme(t) {
         applyKittyTheme(t);
+        applyFrenTheme(t);
         applySystemColorScheme(!isLightColor(t.bgBase));
         applyHyprlandBorders(t);
     }
@@ -109,33 +107,95 @@ Singleton {
     function propagateWallpapers(t) {
         if (!t.wallpapers) return;
         var wp = t.wallpapers;
-
-        // Resolve ~ to HOME
         var home = Quickshell.env("HOME");
 
-        // Hyprlock wallpaper (no sudo needed)
+        // Hyprlock wallpaper + colors
         if (wp.hyprlock) {
             var hyprlockSrc = wp.hyprlock.replace("~", home);
-            wallpaperHyprlockProc.command = ["sh", "-c", 'cp "' + hyprlockSrc + '" "$HOME/.config/hypr/wallpaper/hyprlock.png"'];
+            var hlConf = "";
+            if (t.hyprlock) {
+                var hl = t.hyprlock;
+                var oc = hl.outer_color.replace("#","");
+                var ic = hl.inner_color.replace("#","");
+                var fc = hl.font_color.replace("#","");
+                var cc = hl.clock_color.replace("#","");
+                var dc = hl.date_color.replace("#","");
+                var uc = hl.user_color.replace("#","");
+                hlConf = 'general {\n    grace = 0\n    hide_cursor = true\n}\n\n' +
+                    'background {\n    monitor =\n    path = $HOME/.config/hypr/wallpaper/hyprlock.png\n' +
+                    '    blur_size = 5\n    blur_passes = 2\n    noise = 0.01\n    contrast = 1.2\n' +
+                    '    brightness = 0.8\n    vibrancy = 0.2\n    vibrancy_darkness = 0.0\n}\n\n' +
+                    'input-field {\n    monitor =\n    size = 250, 50\n    outline_thickness = 3\n' +
+                    '    dots_size = 0.33\n    dots_spacing = 0.15\n    dots_center = true\n' +
+                    '    outer_color = rgb(' + oc + ')\n    inner_color = rgb(' + ic + ')\n' +
+                    '    font_color = rgb(' + fc + ')\n    placeholder_text = <i>Password...</i>\n' +
+                    '    hide_input = false\n    position = 0, 200\n    halign = center\n    valign = bottom\n}\n\n' +
+                    'label {\n    monitor =\n    text = cmd[update:1000] echo "<b><big> $(date +\\"%H:%M:%S\\") </big></b>"\n' +
+                    '    color = rgb(' + cc + ')\n    font_size = 94\n    font_family = Hack Nerd Font\n' +
+                    '    position = 0, 0\n    halign = center\n    valign = center\n}\n\n' +
+                    'label {\n    monitor =\n    text = cmd[update:18000000] echo "<b> $(date +\'%A, %-d %B %Y\') </b>"\n' +
+                    '    color = rgb(' + dc + ')\n    font_size = 28\n    font_family = Hack Nerd Font\n' +
+                    '    position = 0, -120\n    halign = center\n    valign = top\n}\n\n' +
+                    'label {\n    monitor =\n    text = "\ $USER"\n    color = rgb(' + uc + ')\n' +
+                    '    font_size = 18\n    font_family = Hack Nerd Font\n    position = 0, 100\n    halign = center\n    valign = bottom\n}\n';
+            }
+            wallpaperHyprlockProc.command = ["sh", "-c",
+                'cp "' + hyprlockSrc + '" "$HOME/.config/hypr/wallpaper/hyprlock.png"' +
+                (hlConf ? '; printf "%s" \'' + hlConf.replace(/'/g, "'\\''") + '\' > "$HOME/.config/hypr/hyprlock.conf"' : '')
+            ];
             wallpaperHyprlockProc.running = true;
         }
 
         // Desktop wallpaper via hyprpaper
         if (wp.desktop) {
             var desktopSrc = wp.desktop.replace("~", home);
-            wallpaperDesktopProc.command = ["sh", "-c", 'hyprctl hyprpaper wallpaper "*,' + desktopSrc + '"'];
+            wallpaperDesktopProc.command = ["sh", "-c",
+                'printf "wallpaper {\\n    monitor = *\\n    path = %s\\n    fit_mode = cover\\n}\\n" "' + desktopSrc + '" > "$HOME/.config/hypr/hyprpaper.conf"; ' +
+                'killall hyprpaper 2>/dev/null; sleep 0.3; setsid hyprpaper >/dev/null 2>&1 &'
+            ];
             wallpaperDesktopProc.running = true;
         }
 
-        // SDDM + GRUB wallpapers (need pkexec for system paths)
+        // SDDM + GRUB (wallpapers + colors, need pkexec)
         var cmds = [];
         if (wp.sddm) {
             var sddmSrc = wp.sddm.replace("~", home);
             cmds.push('cp "' + sddmSrc + '" /usr/share/sddm/themes/sddm-flower-theme/Backgrounds/background.png');
         }
+        if (t.sddm) {
+            var sd = t.sddm;
+            var sddmConf = '[General]\n\nBackground="Backgrounds/background.png"\n\n' +
+                'DimBackgroundImage="0.0"\nScaleImageCropped="true"\nScreenWidth="1920"\nScreenHeight="1080"\n\n' +
+                'FullBlur="false"\nPartialBlur="true"\nBlurRadius="0"\n\n' +
+                'HaveFormBackground="false"\nFormPosition="center"\n' +
+                'BackgroundImageHAlignment="center"\nBackgroundImageVAlignment="center"\n\n' +
+                'MainColor="' + sd.main_color + '"\nAccentColor="' + sd.accent_color + '"\nBackgroundColor="' + sd.background_color + '"\n\n' +
+                'InterfaceShadowSize="6"\nInterfaceShadowOpacity="0.6"\nRoundCorners="20"\nScreenPadding="0"\n' +
+                'Font="Roboto mono"\n\nForceRightToLeft="false"\nForceLastUser="true"\nForcePasswordFocus="true"\n' +
+                'ForceHideCompletePassword="true"\nForceHideVirtualKeyboardButton="false"\nForceHideSystemButtons="false"\n' +
+                'AllowEmptyPassword="false"\nAllowBadUsernames="false"\n\n' +
+                'HourFormat="HH:mm"\nDateFormat="dddd, d of MMMM"\n\nHeaderText="Welcome!"\n';
+            cmds.push('printf "%s" \'' + sddmConf.replace(/'/g, "'\\''") + '\' > /usr/share/sddm/themes/sddm-flower-theme/theme.conf');
+        }
         if (wp.grub) {
             var grubSrc = wp.grub.replace("~", home);
             cmds.push('cp "' + grubSrc + '" /boot/grub/fgrub.png');
+        }
+        if (t.grub_theme) {
+            var gt = t.grub_theme;
+            var grubConf = '# Theme\n' +
+                'title-text: ""\n' +
+                'title-font: "Hack Regular 12"\n' +
+                'title-color: "' + gt.title_color + '"\n' +
+                'desktop-image: "fgrub.png"\n' +
+                'desktop-color: "' + gt.desktop_color + '"\n' +
+                'terminal-font: "Hack Regular 12"\n\n' +
+                '+ boot_menu {\n  left = 50%\n  top = 20%\n  width = 45%\n  height = 60%\n' +
+                '  item_color = "' + gt.item_color + '"\n' +
+                '  selected_item_color = "' + gt.selected_item_color + '"\n' +
+                '  item_height = 32\n  item_padding = 8\n  item_spacing = 4\n' +
+                '  item_font = "Hack Regular 12"\n  selected_item_font = "Hack Bold 12"\n  scrollbar = false\n}\n';
+            cmds.push('printf "%s" \'' + grubConf.replace(/'/g, "'\\''") + '\' > /boot/grub/theme.txt');
         }
         if (cmds.length > 0) {
             wallpaperSystemProc.command = ["pkexec", "sh", "-c", cmds.join(" && ")];
@@ -156,7 +216,7 @@ Singleton {
 
             // Activate Kvantum theme
             if (t.qt.kvantum) {
-                cmds.push('kvantummanager --set "' + t.qt.kvantum + '" 2>/dev/null || true');
+                cmds.push('mkdir -p "$HOME/.config/Kvantum" && printf "[General]\ntheme=%s\\n" "' + t.qt.kvantum + '" > "$HOME/.config/Kvantum/kvantum.conf"');
             }
         }
 
@@ -194,6 +254,21 @@ Singleton {
             generateProc.running = true;
         }
         setWallpaperMode();
+    }
+
+    function applyFrenTheme(t) {
+        if (!t.fren) return;
+        var f = t.fren;
+        var conf = 'background = "' + f.background + '"\n' +
+            'foreground = "' + f.foreground + '"\n\n' +
+            'border = "' + f.border + '"\n' +
+            'focus_border = "' + f.focus_border + '"\n' +
+            'muted = "' + f.muted + '"\n\n' +
+            'directory = "' + f.directory + '"\n\n' +
+            'status_bg = "' + f.status_bg + '"\n' +
+            'status_fg = "' + f.status_fg + '"\n';
+        frenProc.command = ["sh", "-c", 'printf "%s" "' + conf.replace(/\n/g, '\\n').replace(/"/g, '\\"') + '" > "$HOME/.config/fren/theme.toml"'];
+        frenProc.running = true;
     }
 
     function applyKittyTheme(t) {
@@ -265,6 +340,7 @@ Singleton {
     Process { id: saveProc; running: false }
     Process { id: generateProc; running: false }
     Process { id: kittyProc; running: false }
+    Process { id: frenProc; running: false }
     Process { id: colorSchemeProc; running: false }
     Process { id: hyprlandProc; running: false }
     Process { id: wallpaperHyprlockProc; running: false }
@@ -329,20 +405,37 @@ Singleton {
                 sddm: "~/.config/quickshell/theme-switcher/wallpapers/tokyo-night/sddm.png",
                 grub: "~/.config/quickshell/theme-switcher/wallpapers/tokyo-night/grub.png"
             },
-            qt: {
-                kvantum: "Kvantum-Tokyo-Night",
-                style: "kvantum-dark",
-                iconTheme: "Tokyonight-Dark"
-            },
-            gtk: {
-                theme: "Tokyonight-Dark",
-                iconTheme: "Tokyonight-Dark"
-            },
+            qt: { kvantum: "Kvantum-Tokyo-Night", style: "kvantum-dark", iconTheme: "Tokyonight-Dark" },
+            gtk: { theme: "Tokyonight-Dark", iconTheme: "Tokyonight-Dark" },
+            fren: { background: "#1a1b26", foreground: "#c0caf5", border: "#32364a", focus_border: "#7aa2f7", muted: "#565f89", directory: "#7dcfff", status_bg: "#1a1b26", status_fg: "#7aa2f7" },
             bgBase: "#1a1b26", bgSurface: "#24283b", bgHover: "#1e2235",
             bgSelected: "#283457", bgBorder: "#32364a",
             textPrimary: "#c0caf5", textSecondary: "#a9b1d6", textMuted: "#565f89",
             accentPrimary: "#7aa2f7", accentCyan: "#7dcfff",
-            accentGreen: "#9ece6a", accentOrange: "#ff9e64", accentRed: "#f7768e"
+            accentGreen: "#9ece6a", accentOrange: "#ff9e64", accentRed: "#f7768e",
+            hyprlock: { outer_color: "#7aa2f7", inner_color: "#1a1b26", font_color: "#c0caf5", clock_color: "#c0caf5", date_color: "#7aa2f7", user_color: "#7dcfff" },
+            sddm: { main_color: "#c0caf5", accent_color: "#7aa2f7", background_color: "#1a1b26" },
+            grub_theme: { title_color: "#7aa2f7", desktop_color: "#1a1b26", item_color: "#a9b1d6", selected_item_color: "#7aa2f7" }
+        },
+        {
+            name: "Light", family: "Tokyo Light",
+            wallpapers: {
+                desktop: "~/.config/quickshell/theme-switcher/wallpapers/tokyo-light/desktop.png",
+                hyprlock: "~/.config/quickshell/theme-switcher/wallpapers/tokyo-light/hyprlock.png",
+                sddm: "~/.config/quickshell/theme-switcher/wallpapers/tokyo-light/sddm.png",
+                grub: "~/.config/quickshell/theme-switcher/wallpapers/tokyo-light/grub.png"
+            },
+            qt: { kvantum: "Kvantum-Tokyo-Light", style: "kvantum", iconTheme: "Tokyonight-Light" },
+            gtk: { theme: "Tokyonight-Light", iconTheme: "Tokyonight-Light" },
+            fren: { background: "#f5f5f5", foreground: "#404040", border: "#d8d8d8", focus_border: "#607080", muted: "#999999", directory: "#607080", status_bg: "#eaeaea", status_fg: "#607080" },
+            bgBase: "#f5f5f5", bgSurface: "#eaeaea", bgHover: "#e2e2e2",
+            bgSelected: "#d0d0d0", bgBorder: "#d8d8d8",
+            textPrimary: "#404040", textSecondary: "#606060", textMuted: "#999999",
+            accentPrimary: "#607080", accentCyan: "#607080",
+            accentGreen: "#6a8a6a", accentOrange: "#9a7050", accentRed: "#9a5555",
+            hyprlock: { outer_color: "#607080", inner_color: "#f5f5f5", font_color: "#404040", clock_color: "#404040", date_color: "#607080", user_color: "#607080" },
+            sddm: { main_color: "#404040", accent_color: "#607080", background_color: "#f5f5f5" },
+            grub_theme: { title_color: "#607080", desktop_color: "#f5f5f5", item_color: "#606060", selected_item_color: "#607080" }
         }
     ]
 }
