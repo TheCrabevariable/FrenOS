@@ -1,6 +1,8 @@
 # FrenOS
 
-Arch Linux automated installer ISO with Hyprland, Quickshell Tokyo Night bar, and single-reboot post-install configuration.
+## About 
+
+FrenOS is a flavour of Arch Linux that i made with what i like about it, and i built an iso for easy install (it does close to everything by itself), so if you wish to try it be my guest love you all <3.
 
 - **BTRFS** — working
 - **SUBVOLUMES** — working
