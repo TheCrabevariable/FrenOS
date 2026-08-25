@@ -1,412 +1,440 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# ── FrenOS installer (runs from live ISO) ──────────────────
-# Uses gum for all interactive prompts (handles serial console properly)
+# ── FrenOS installer ───────────────────────────────────────
+# Two-phase architecture:
+#   arf-installer              ask questions → execute install
+#   arf-installer --ask        only collect answers → $ANSWERS_FILE
+#   arf-installer --run FILE   execute non-interactively from answers file
+#
+# All interactivity lives in ask(); all actions live in run().
+# A GUI frontend writes its own answers file and calls --run.
 
+# ── Helpers ────────────────────────────────────────────────
 info()  { gum style ":: $*" --foreground "#00ffff"; }
 ok()    { gum style "==> $*" --foreground "#00ff00" --bold; }
 err()   { gum style "==> $*" --foreground "#ff0000" --bold >&2; exit 1; }
 
+# ── Mode ───────────────────────────────────────────────────
+MODE="${1:-all}"
+ANSWERS_FILE="/tmp/arf-answers.env"
+[ -n "${2:-}" ] && ANSWERS_FILE="$2"
+
 gum style --border double --padding "1 2" --foreground "#00ffff" --bold "FrenOS Installer"
 
-# ── Keyboard layout ─────────────────────────────────────────
+# ── Keyboard layout (always runs first) ───────────────────
 info "Loading keyboard layouts..."
 KBD_LAYOUT=$(find /usr/share/kbd/keymaps -name "*.map.gz" | sed 's|.*/||;s|\.map\.gz||' | sort | gum filter --placeholder "Type to search (e.g. us, de, fr)..." --header "Select keyboard layout" --height 15)
 [ -z "$KBD_LAYOUT" ] && KBD_LAYOUT="us"
 loadkeys "$KBD_LAYOUT" 2>/dev/null || true
 ok "Keyboard layout: $KBD_LAYOUT"
 
-# ── Detect FrenOS source ───────────────────────────────────
-ARF_SRC="/opt/arf-linux"
-if [ ! -d "$ARF_SRC" ]; then
-  err "FrenOS source not found at /opt/arf-linux. Rebuild the ISO with the source bundled."
-fi
+# ════════════════════════════════════════════════════════════
+# ASK PHASE — all prompts, zero side-effects beyond loadkeys
+# ════════════════════════════════════════════════════════════
+ask() {
 
-# ── Disk selection ────────────────────────────────────────────
-DISK=$(lsblk -dpno NAME,SIZE,MODEL | grep -v loop | gum choose --header "Select install disk" | awk '{print $1}')
-[ -z "$DISK" ] && err "No disk selected"
-[ ! -b "$DISK" ] && err "Not a block device: $DISK"
+  # ── Detect FrenOS source ─────────────────────────────────
+  ARF_SRC="/opt/arf-linux"
+  [ -d "$ARF_SRC" ] || err "FrenOS source not found at /opt/arf-linux"
 
-# ── WiFi setup ────────────────────────────────────────────────
-if command -v nmcli &>/dev/null && nmcli radio wifi | grep -q enabled; then
-  info "Scanning for WiFi networks..."
-  nmcli dev wifi list --rescan yes 2>/dev/null | head -40 || true
-  WIFI_SSID=$(gum input --placeholder "SSID or leave blank to skip" --prompt "WiFi SSID> ")
-  if [ -n "$WIFI_SSID" ]; then
-    WIFIConnected=false
-    while [ "$WIFIConnected" = false ]; do
-      WIFI_PASS=$(gum input --password --placeholder "Password" --prompt "WiFi password> ")
-      info "Connecting to ${WIFI_SSID}..."
-      if nmcli dev wifi connect "$WIFI_SSID" password "$WIFI_PASS" 2>&1; then
-        ok "Connected to ${WIFI_SSID}"
-        WIFIConnected=true
-      else
+  # ── Disk selection ───────────────────────────────────────
+  DISK=$(lsblk -dpno NAME,SIZE,MODEL | grep -v loop | gum choose --header "Select install disk" | awk '{print $1}')
+  [ -z "$DISK" ] && err "No disk selected"
+  [ ! -b "$DISK" ] && err "Not a block device: $DISK"
+
+  # ── WiFi ─────────────────────────────────────────────────
+  WIFI_SSID=""
+  WIFI_PASS=""
+  if command -v nmcli &>/dev/null && nmcli radio wifi | grep -q enabled; then
+    info "Scanning for WiFi networks..."
+    nmcli dev wifi list --rescan yes 2>/dev/null | head -40 || true
+    WIFI_SSID=$(gum input --placeholder "SSID or leave blank to skip" --prompt "WiFi SSID> ")
+    if [ -n "$WIFI_SSID" ]; then
+      while true; do
+        WIFI_PASS=$(gum input --password --placeholder "Password" --prompt "WiFi password> ")
+        info "Connecting to ${WIFI_SSID}..."
+        if nmcli dev wifi connect "$WIFI_SSID" password "$WIFI_PASS" 2>&1; then
+          ok "Connected to ${WIFI_SSID}"
+          break
+        fi
         info "Failed to connect to ${WIFI_SSID}"
-        gum confirm --affirmative "Retry" --negative "Skip WiFi" "Try again?" || break
+        gum confirm --affirmative "Retry" --negative "Skip WiFi" "Try again?" || { WIFI_SSID=""; WIFI_PASS=""; break; }
+      done
+    fi
+  else
+    info "No WiFi device detected — will use Ethernet (if available)"
+  fi
+
+  # ── User info ────────────────────────────────────────────
+  HOSTNAME=$(gum input --placeholder "myhostname" --prompt "Hostname> " --value "arf-pc")
+  [ -z "$HOSTNAME" ] && err "Hostname required"
+
+  USERNAME=$(gum input --placeholder "username" --prompt "Username> ")
+  [ -z "$USERNAME" ] && err "Username required"
+
+  PASSWORD=$(gum input --password --prompt "Password> ")
+  [ -z "$PASSWORD" ] && err "Password required"
+
+  TIMEZONE=$(timedatectl list-timezones 2>/dev/null | gum filter --placeholder "Type to search..." --header "Select timezone" --height 15)
+  [ -z "$TIMEZONE" ] && TIMEZONE=$(gum input --placeholder "America/New_York" --prompt "Timezone> ")
+  [ -z "$TIMEZONE" ] && err "Timezone required"
+
+  # ── System choices ───────────────────────────────────────
+  FS_CHOICE=$(gum choose "btrfs" "ext4" --header "Filesystem")
+  SWAP_CHOICE=$(gum choose "none" "4GB" "8GB" --header "Swap size")
+  ZRAM_CHOICE=$(gum choose "yes" "no" --header "Enable zram? (compressed swap in RAM, half your RAM)" --selected "yes")
+  ENCRYPT_CHOICE=$(gum choose "no" "yes" --header "Encrypt root partition with LUKS?" --selected "no")
+  PARALLEL_DL=$(gum choose "1" "2" "3" "4" --header "Parallel downloads (pacman)")
+  KERNEL=$(gum choose --header "Choose kernel" "linux" "linux-zen")
+  [ -z "$KERNEL" ] && KERNEL="linux"
+
+  # ── Btrfs follow-ups ─────────────────────────────────────
+  SUBVOLUMES="no"
+  SNAPPER="no"
+  if [ "$FS_CHOICE" = "btrfs" ]; then
+    SUBVOLUMES=$(gum choose "yes" "no" --header "Create subvolumes (@, @home, @snapshots)?" --selected "yes")
+    if [ "$SUBVOLUMES" = "yes" ]; then
+      SNAPPER=$(gum choose "yes" "no" --header "Configure snapper snapshots?" --selected "yes")
+    fi
+  fi
+
+  # ── LUKS passphrase ──────────────────────────────────────
+  LUKS_PASS=""
+  if [ "$ENCRYPT_CHOICE" = "yes" ]; then
+    while true; do
+      LUKS_PASS=$(gum input --password --placeholder "LUKS passphrase")
+      LUKS_PASS2=$(gum input --password --placeholder "Confirm passphrase")
+      if [ "$LUKS_PASS" = "$LUKS_PASS2" ] && [ -n "$LUKS_PASS" ]; then
+        break
       fi
+      gum style "Passphrases don't match or empty. Try again." --foreground yellow >&2
+    done
+    info "Root partition will be encrypted with LUKS"
+  fi
+
+  # ── Extra disks ──────────────────────────────────────────
+  EXTRA_DISKS=""
+  mapfile -t EXTRA_CAND < <(lsblk -rpno PATH,FSTYPE,MOUNTPOINT 2>/dev/null | awk -v d="$DISK" \
+    '$2 != "" && $2 != "swap" && $2 != "crypto_LUKS" && $3 == "" && index($1, d) != 1 {print $1}')
+
+  if [ ${#EXTRA_CAND[@]} -gt 0 ]; then
+    EXTRA_ADDED=""
+    while true; do
+      FRESH=()
+      for part in "${EXTRA_CAND[@]}"; do
+        echo "$EXTRA_ADDED" | grep -qF "$part" && continue
+        FRESH+=("$part")
+      done
+      [ ${#FRESH[@]} -eq 0 ] && break
+
+      EXTRA_CHOICES=("Done — continue install")
+      for part in "${FRESH[@]}"; do
+        p_fs=$(lsblk -drno FSTYPE "$part" 2>/dev/null)
+        p_size=$(lsblk -drno SIZE "$part" 2>/dev/null)
+        p_label=$(lsblk -drno LABEL "$part" 2>/dev/null)
+        [ -n "$p_label" ] || p_label="unlabeled"
+        EXTRA_CHOICES+=("$part [$p_fs, $p_size, \"$p_label\"]")
+      done
+
+      EXTRA_PICK=$(gum choose "${EXTRA_CHOICES[@]}" --header "Automount another disk at boot?" --height 15)
+      [[ "$EXTRA_PICK" == Done* ]] && break
+
+      EXTRA_PART="${EXTRA_PICK%% *}"
+      EXTRA_DISKS="${EXTRA_DISKS:+$EXTRA_DISKS }$EXTRA_PART"
+      EXTRA_ADDED="${EXTRA_ADDED:+$EXTRA_ADDED }$EXTRA_PART"
+      ok "Queued $EXTRA_PART for automount"
     done
   fi
-else
-  info "No WiFi device detected — will use Ethernet (if available)"
-fi
 
-# ── User info ─────────────────────────────────────────────────
-HOSTNAME=$(gum input --placeholder "myhostname" --prompt "Hostname> " --value "arf-pc")
-[ -z "$HOSTNAME" ] && err "Hostname required"
+  # ── Wipe confirmation ────────────────────────────────────
+  gum confirm --affirmative "Yes, wipe it" --negative "Abort" "⚠️  THIS WILL WIPE ALL DATA ON $DISK" || err "Aborted by user"
 
-USERNAME=$(gum input --placeholder "username" --prompt "Username> ")
-[ -z "$USERNAME" ] && err "Username required"
+  # ── Extra install options ────────────────────────────────
+  INSPECT_CHROOT="no"
+  gum confirm "Inspect the install in chroot before rebooting?" --default=false && INSPECT_CHROOT="yes"
 
-PASSWORD=$(gum input --password --prompt "Password> ")
-[ -z "$PASSWORD" ] && err "Password required"
+  # ── Save answers ─────────────────────────────────────────
+  : > "$ANSWERS_FILE"
+  {
+    printf 'KBD_LAYOUT=%q\n'       "$KBD_LAYOUT"
+    printf 'WIFI_SSID=%q\n'        "$WIFI_SSID"
+    printf 'WIFI_PASS=%q\n'        "$WIFI_PASS"
+    printf 'HOSTNAME=%q\n'         "$HOSTNAME"
+    printf 'USERNAME=%q\n'         "$USERNAME"
+    printf 'PASSWORD=%q\n'         "$PASSWORD"
+    printf 'TIMEZONE=%q\n'         "$TIMEZONE"
+    printf 'FS_CHOICE=%q\n'        "$FS_CHOICE"
+    printf 'SUBVOLUMES=%q\n'       "$SUBVOLUMES"
+    printf 'SNAPPER=%q\n'          "$SNAPPER"
+    printf 'SWAP_CHOICE=%q\n'      "$SWAP_CHOICE"
+    printf 'ZRAM_CHOICE=%q\n'      "$ZRAM_CHOICE"
+    printf 'ENCRYPT_CHOICE=%q\n'   "$ENCRYPT_CHOICE"
+    printf 'PARALLEL_DL=%q\n'      "$PARALLEL_DL"
+    printf 'KERNEL=%q\n'           "$KERNEL"
+    printf 'DISK=%q\n'             "$DISK"
+    printf 'EXTRA_DISKS=%q\n'      "$EXTRA_DISKS"
+    printf 'LUKS_PASS=%q\n'        "$LUKS_PASS"
+    printf 'INSPECT_CHROOT=%q\n'   "$INSPECT_CHROOT"
+  } >> "$ANSWERS_FILE"
+  chmod 600 "$ANSWERS_FILE"
+  ok "Answers written to $ANSWERS_FILE"
+}
 
-TIMEZONE=$(timedatectl list-timezones 2>/dev/null | gum filter --placeholder "Type to search..." --header "Select timezone" --height 15)
-if [ -z "$TIMEZONE" ]; then
-  TIMEZONE=$(gum input --placeholder "America/New_York" --prompt "Timezone> ")
-fi
-[ -z "$TIMEZONE" ] && err "Timezone required"
+# ════════════════════════════════════════════════════════════
+# RUN PHASE — all actions, zero prompts, reads answers file
+# ════════════════════════════════════════════════════════════
+run() {
+  [ -f "$ANSWERS_FILE" ] || err "No answers file: $ANSWERS_FILE"
+  # shellcheck disable=SC1090
+  . "$ANSWERS_FILE"
+  chmod 600 "$ANSWERS_FILE"
 
-# ── Mirrorlist optimization ────────────────────────────────────
-info "Optimizing mirrorlist for your location..."
-reflector --latest 20 --protocol https --sort rate --save /etc/pacman.d/mirrorlist 2>&1 || info "Mirrorlist optimization skipped (no internet?)"
-ok "Mirrorlist optimized"
+  # Validate required
+  : "${DISK:?}" "${USERNAME:?}" "${PASSWORD:?}" "${TIMEZONE:?}" "${FS_CHOICE:?}" "${KERNEL:?}"
 
-FS_CHOICE=$(gum choose "btrfs" "ext4" --header "Filesystem")
-SUBVOLUMES=""
-SWAP_CHOICE=$(gum choose "none" "4GB" "8GB" --header "Swap size")
-ZRAM_CHOICE=$(gum choose "yes" "no" --header "Enable zram? (compressed swap in RAM, half your RAM)" --selected "yes")
-ENCRYPT_CHOICE=$(gum choose "no" "yes" --header "Encrypt root partition with LUKS?" --selected "no")
-PARALLEL_DL=$(gum choose "1" "2" "3" "4" --header "Parallel downloads (pacman)")
+  # FrenOS source
+  ARF_SRC="/opt/arf-linux"
+  [ -d "$ARF_SRC" ] || err "FrenOS source not found at /opt/arf-linux"
 
-# ── LUKS passphrase ────────────────────────────────────────
-LUKS_PASS=""
-if [ "$ENCRYPT_CHOICE" = "yes" ]; then
-  while true; do
-    LUKS_PASS=$(gum input --password --placeholder "LUKS passphrase")
-    LUKS_PASS2=$(gum input --password --placeholder "Confirm passphrase")
-    if [ "$LUKS_PASS" = "$LUKS_PASS2" ] && [ -n "$LUKS_PASS" ]; then
-      break
-    fi
-    gum style "Passphrases don't match or empty. Try again." --foreground yellow >&2
-  done
-  info "Root partition will be encrypted with LUKS"
-fi
+  # ── Mirrorlist ───────────────────────────────────────────
+  info "Optimizing mirrorlist for your location..."
+  reflector --latest 20 --protocol https --sort rate --save /etc/pacman.d/mirrorlist 2>&1 || info "Mirrorlist optimization skipped (no internet?)"
+  ok "Mirrorlist optimized"
 
-# ── Confirmation ──────────────────────────────────────────────
-gum confirm --affirmative "Yes, wipe it" --negative "Abort" "⚠️  THIS WILL WIPE ALL DATA ON $DISK" || err "Aborted by user"
-
-# ── Detect SSD & partition prefix ─────────────────────────────
-IS_SSD=false
-DISK_NAME="$(basename "$DISK")"
-if [ -f "/sys/block/$DISK_NAME/queue/rotational" ]; then
-  [ "$(cat "/sys/block/$DISK_NAME/queue/rotational")" = "0" ] && IS_SSD=true
-fi
-case "$DISK_NAME" in
-  nvme*|mmcblk*) PART_PREFIX="p" ;;
-  *)             PART_PREFIX="" ;;
-esac
-PART1="${DISK}${PART_PREFIX}1"
-PART2="${DISK}${PART_PREFIX}2"
-
-# ── Partition, format, mount ──────────────────────────────────
-info "Partitioning $DISK..."
-parted -s "$DISK" mklabel gpt
-parted -s "$DISK" mkpart primary fat32 1MiB 1025MiB
-parted -s "$DISK" set 1 esp on
-sleep 1
-partprobe "$DISK" 2>/dev/null || true
-
-if [ "$FS_CHOICE" = "btrfs" ]; then
-  parted -s "$DISK" mkpart primary btrfs 1025MiB 100%
-else
-  parted -s "$DISK" mkpart primary ext4 1025MiB 100%
-fi
-sleep 1
-partprobe "$DISK" 2>/dev/null || true
-
-info "Formatting partitions..."
-mkfs.fat -F32 "$PART1"
-
-# ── LUKS encryption ────────────────────────────────────────
-ROOT_DEV="$PART2"
-LUKS_UUID=""
-if [ "$ENCRYPT_CHOICE" = "yes" ]; then
-  info "Encrypting root partition with LUKS..."
-  wipefs -a "$PART2" 2>/dev/null || true
-  echo -n "$LUKS_PASS" | cryptsetup luksFormat --type luks2 --cipher aes-xts-plain64 --key-size 512 --hash sha256 --iter-time 4000 "$PART2" - 2>/dev/null
-  echo -n "$LUKS_PASS" | cryptsetup open --type luks2 "$PART2" cryptroot - 2>/dev/null
-  ROOT_DEV="/dev/mapper/cryptroot"
-  LUKS_UUID=$(blkid -s UUID -o value "$PART2")
-  ok "LUKS encryption enabled (UUID: $LUKS_UUID)"
-fi
-
-# ── Format root ────────────────────────────────────────────
-wipefs -a "$ROOT_DEV" 2>/dev/null || true
-if [ "$FS_CHOICE" = "btrfs" ]; then
-  mkfs.btrfs -f "$ROOT_DEV"
-  mount "$ROOT_DEV" /mnt
-  if gum confirm "Create subvolumes (@, @home, @snapshots)?" --default=true; then
-    SUBVOLUMES=1
-    btrfs subvolume create /mnt/@
-    btrfs subvolume create /mnt/@home
-    btrfs subvolume create /mnt/@snapshots
-    if [ "$SWAP_CHOICE" != "none" ]; then
-      btrfs subvolume create /mnt/@swap
-    fi
-    umount /mnt
-    mount -o subvol=@,compress=zstd "$ROOT_DEV" /mnt
-    mkdir -p /mnt/{home,.snapshots}
-    mount -o subvol=@home,compress=zstd "$ROOT_DEV" /mnt/home
-    mount -o subvol=@snapshots,compress=zstd "$ROOT_DEV" /mnt/.snapshots
-    if gum confirm "Configure snapper snapshots?" --default=true; then
-      SNAPPER_PKG=1
-    else
-      SNAPPER_PKG=''
-    fi
-  else
-    SNAPPER_PKG=''
-    umount /mnt
-    mount -o compress=zstd "$ROOT_DEV" /mnt
-  fi
-else
-  SNAPPER_PKG=''
-  mkfs.ext4 -F "$ROOT_DEV"
-  mount "$ROOT_DEV" /mnt
-fi
-
-mkdir -p /mnt/boot
-mount "$PART1" /mnt/boot
-
-ok "Partitions created and mounted"
-
-# ── Swap ───────────────────────────────────────────────────
-if [ "$SWAP_CHOICE" != "none" ]; then
-  info "Creating ${SWAP_CHOICE} swapfile..."
-  if [ "$FS_CHOICE" = "btrfs" ] && [ "$SUBVOLUMES" = "1" ]; then
-    info "Using @swap subvolume for swapfile"
-    mkdir -p /mnt/swap
-    mount -o subvol=@swap "$ROOT_DEV" /mnt/swap
-    touch /mnt/swap/swapfile
-    chattr +C /mnt/swap/swapfile 2>/dev/null || true
-    dd if=/dev/zero of=/mnt/swap/swapfile bs=1M count=$(( ${SWAP_CHOICE%GB} * 1024 )) status=progress
-    chmod 600 /mnt/swap/swapfile
-    mkswap /mnt/swap/swapfile
-    swapon /mnt/swap/swapfile
-    SWAP_FSTAB="/swap/swapfile none swap sw 0 0"
-  else
-    if [ "$FS_CHOICE" = "btrfs" ]; then
-      touch /mnt/swapfile
-      chattr +C /mnt/swapfile 2>/dev/null || true
-      dd if=/dev/zero of=/mnt/swapfile bs=1M count=$(( ${SWAP_CHOICE%GB} * 1024 )) status=progress
-    else
-      fallocate -l "$SWAP_CHOICE" /mnt/swapfile
-    fi
-    chmod 600 /mnt/swapfile
-    mkswap /mnt/swapfile
-    swapon /mnt/swapfile
-    SWAP_FSTAB="/swapfile none swap sw 0 0"
-  fi
-  ok "Swap created: ${SWAP_CHOICE}"
-fi
-
-# Write keyboard layout to installed system
-mkdir -p /mnt/etc
-echo "KEYMAP=$KBD_LAYOUT" > /mnt/etc/vconsole.conf
-
-# ── Kernel selection ──────────────────────────────────────────
-KERNEL=$(gum choose --header "Choose kernel" "linux" "linux-zen")
-[ -z "$KERNEL" ] && KERNEL="linux"
-
-# ── Install base system ───────────────────────────────────────
-info "Installing base system via pacstrap..."
-
-# Ensure mirrorlist has servers (reflector may have failed)
-if ! grep -q '^Server' /etc/pacman.d/mirrorlist 2>/dev/null; then
-  info "Mirrorlist empty, adding default Arch mirrors..."
-  cat > /etc/pacman.d/mirrorlist << 'MIRROR'
+  # ── Mirrorlist fallback ──────────────────────────────────
+  if ! grep -q '^Server' /etc/pacman.d/mirrorlist 2>/dev/null; then
+    info "Mirrorlist empty, adding default Arch mirrors..."
+    cat > /etc/pacman.d/mirrorlist << 'MIRROR'
 Server = https://geo.mirror.pkgbuild.com/$repo/os/$arch
 Server = https://mirror.rackspace.com/archlinux/$repo/os/$arch
 MIRROR
-fi
+  fi
 
-# Set parallel downloads on live system for pacstrap
-sed -i "s/^#\?ParallelDownloads = .*/ParallelDownloads = ${PARALLEL_DL}/" /etc/pacman.conf 2>/dev/null || true
+  # ── SSD detection ────────────────────────────────────────
+  IS_SSD=false
+  DISK_NAME="$(basename "$DISK")"
+  if [ -f "/sys/block/$DISK_NAME/queue/rotational" ]; then
+    [ "$(cat "/sys/block/$DISK_NAME/queue/rotational")" = "0" ] && IS_SSD=true
+  fi
+  case "$DISK_NAME" in
+    nvme*|mmcblk*) PART_PREFIX="p" ;;
+    *)             PART_PREFIX="" ;;
+  esac
+  PART1="${DISK}${PART_PREFIX}1"
+  PART2="${DISK}${PART_PREFIX}2"
 
-PACSTRAP_PKGS=(
-  base "$KERNEL" linux-firmware
-  base-devel
-  grub efibootmgr
-  sudo networkmanager
-  git btop
-  reflector
-  zsh
-)
-if [ -n "${SNAPPER_PKG:-}" ]; then
-  PACSTRAP_PKGS+=(snapper)
-fi
+  # ── Partition ────────────────────────────────────────────
+  info "Partitioning $DISK..."
+  parted -s "$DISK" mklabel gpt
+  parted -s "$DISK" mkpart primary fat32 1MiB 1025MiB
+  parted -s "$DISK" set 1 esp on
+  sleep 1; partprobe "$DISK" 2>/dev/null || true
 
-pacstrap -K /mnt "${PACSTRAP_PKGS[@]}"
-ok "Base system installed"
+  if [ "$FS_CHOICE" = "btrfs" ]; then
+    parted -s "$DISK" mkpart primary btrfs 1025MiB 100%
+  else
+    parted -s "$DISK" mkpart primary ext4 1025MiB 100%
+  fi
+  sleep 1; partprobe "$DISK" 2>/dev/null || true
 
-# ── Configure installed system ────────────────────────────────
-info "Configuring installed system..."
+  info "Formatting partitions..."
+  mkfs.fat -F32 "$PART1"
 
-genfstab -U /mnt >> /mnt/etc/fstab
+  # ── LUKS ─────────────────────────────────────────────────
+  ROOT_DEV="$PART2"
+  LUKS_UUID=""
+  if [ "$ENCRYPT_CHOICE" = "yes" ]; then
+    info "Encrypting root partition with LUKS..."
+    wipefs -a "$PART2" 2>/dev/null || true
+    echo -n "$LUKS_PASS" | cryptsetup luksFormat --type luks2 --cipher aes-xts-plain64 --key-size 512 --hash sha256 --iter-time 4000 "$PART2" - 2>/dev/null
+    echo -n "$LUKS_PASS" | cryptsetup open --type luks2 "$PART2" cryptroot - 2>/dev/null
+    ROOT_DEV="/dev/mapper/cryptroot"
+    LUKS_UUID=$(blkid -s UUID -o value "$PART2")
+    ok "LUKS enabled (UUID: $LUKS_UUID)"
+  fi
 
-# Append swap to fstab (after genfstab creates it)
-if [ -n "${SWAP_FSTAB:-}" ]; then
-  echo "$SWAP_FSTAB" >> /mnt/etc/fstab
-fi
+  # ── Root filesystem ──────────────────────────────────────
+  wipefs -a "$ROOT_DEV" 2>/dev/null || true
+  SWAP_FSTAB=""
 
-arch-chroot /mnt ln -sf "/usr/share/zoneinfo/$TIMEZONE" /etc/localtime
-arch-chroot /mnt hwclock --systohc
+  if [ "$FS_CHOICE" = "btrfs" ]; then
+    mkfs.btrfs -f "$ROOT_DEV"
+    mount "$ROOT_DEV" /mnt
+    if [ "$SUBVOLUMES" = "yes" ]; then
+      btrfs subvolume create /mnt/@
+      btrfs subvolume create /mnt/@home
+      btrfs subvolume create /mnt/@snapshots
+      [ "$SWAP_CHOICE" != "none" ] && btrfs subvolume create /mnt/@swap
+      umount /mnt
+      mount -o subvol=@,compress=zstd "$ROOT_DEV" /mnt
+      mkdir -p /mnt/{home,.snapshots}
+      mount -o subvol=@home,compress=zstd "$ROOT_DEV" /mnt/home
+      mount -o subvol=@snapshots,compress=zstd "$ROOT_DEV" /mnt/.snapshots
+    else
+      umount /mnt
+      mount -o compress=zstd "$ROOT_DEV" /mnt
+    fi
+  else
+    mkfs.ext4 -F "$ROOT_DEV"
+    mount "$ROOT_DEV" /mnt
+  fi
 
-sed -i 's/^#en_US.UTF-8/en_US.UTF-8/' /mnt/etc/locale.gen
-arch-chroot /mnt locale-gen
-echo "LANG=en_US.UTF-8" > /mnt/etc/locale.conf
+  mkdir -p /mnt/boot
+  mount "$PART1" /mnt/boot
+  ok "Partitions created and mounted"
 
-echo "$HOSTNAME" > /mnt/etc/hostname
-cat > /mnt/etc/hosts <<HOSTS
+  # ── Swap ─────────────────────────────────────────────────
+  if [ "$SWAP_CHOICE" != "none" ]; then
+    info "Creating ${SWAP_CHOICE} swapfile..."
+    SWAP_SIZE=$(( ${SWAP_CHOICE%GB} * 1024 ))
+    if [ "$FS_CHOICE" = "btrfs" ] && [ "$SUBVOLUMES" = "yes" ]; then
+      mkdir -p /mnt/swap
+      mount -o subvol=@swap "$ROOT_DEV" /mnt/swap
+      touch /mnt/swap/swapfile
+      chattr +C /mnt/swap/swapfile 2>/dev/null || true
+      dd if=/dev/zero of=/mnt/swap/swapfile bs=1M count="$SWAP_SIZE" status=progress
+      chmod 600 /mnt/swap/swapfile
+      mkswap /mnt/swap/swapfile
+      swapon /mnt/swap/swapfile
+      SWAP_FSTAB="/swap/swapfile none swap sw 0 0"
+    else
+      if [ "$FS_CHOICE" = "btrfs" ]; then
+        touch /mnt/swapfile; chattr +C /mnt/swapfile 2>/dev/null || true
+        dd if=/dev/zero of=/mnt/swapfile bs=1M count="$SWAP_SIZE" status=progress
+      else
+        fallocate -l "${SWAP_CHOICE}" /mnt/swapfile
+      fi
+      chmod 600 /mnt/swapfile; mkswap /mnt/swapfile; swapon /mnt/swapfile
+      SWAP_FSTAB="/swapfile none swap sw 0 0"
+    fi
+    ok "Swap created: ${SWAP_CHOICE}"
+  fi
+
+  # ── Keyboard map + pacstrap ──────────────────────────────
+  mkdir -p /mnt/etc
+  echo "KEYMAP=$KBD_LAYOUT" > /mnt/etc/vconsole.conf
+
+  info "Installing base system via pacstrap..."
+  sed -i "s/^#\?ParallelDownloads = .*/ParallelDownloads = ${PARALLEL_DL}/" /etc/pacman.conf 2>/dev/null || true
+
+  PACSTRAP_PKGS=(base "$KERNEL" linux-firmware base-devel grub efibootmgr sudo networkmanager git btop reflector zsh)
+  [ "$SNAPPER" = "yes" ] && PACSTRAP_PKGS+=(snapper)
+
+  pacstrap -K /mnt "${PACSTRAP_PKGS[@]}"
+  ok "Base system installed"
+
+  # ── fstab ────────────────────────────────────────────────
+  info "Configuring installed system..."
+  genfstab -U /mnt >> /mnt/etc/fstab
+  [ -n "$SWAP_FSTAB" ] && echo "$SWAP_FSTAB" >> /mnt/etc/fstab
+
+  arch-chroot /mnt ln -sf "/usr/share/zoneinfo/$TIMEZONE" /etc/localtime
+  arch-chroot /mnt hwclock --systohc
+
+  sed -i 's/^#en_US.UTF-8/en_US.UTF-8/' /mnt/etc/locale.gen
+  arch-chroot /mnt locale-gen
+  echo "LANG=en_US.UTF-8" > /mnt/etc/locale.conf
+
+  echo "$HOSTNAME" > /mnt/etc/hostname
+  cat > /mnt/etc/hosts <<HOSTS
 127.0.0.1   localhost
 ::1         localhost
 127.0.1.1   $HOSTNAME.localdomain $HOSTNAME
 HOSTS
 
-echo "root:$PASSWORD" | arch-chroot /mnt chpasswd
-arch-chroot /mnt useradd -m -G wheel,video,input -s /bin/zsh "$USERNAME"
-echo "$USERNAME:$PASSWORD" | arch-chroot /mnt chpasswd
-echo "%wheel ALL=(ALL:ALL) ALL" > /mnt/etc/sudoers.d/10-wheel
+  echo "root:$PASSWORD" | arch-chroot /mnt chpasswd
+  arch-chroot /mnt useradd -m -G wheel,video,input -s /bin/zsh "$USERNAME"
+  echo "$USERNAME:$PASSWORD" | arch-chroot /mnt chpasswd
+  echo "%wheel ALL=(ALL:ALL) ALL" > /mnt/etc/sudoers.d/10-wheel
 
-# ── Optional: automount extra disk(s) at boot ─────────────────
-USER_UID=$(arch-chroot /mnt id -u "$USERNAME" 2>/dev/null || echo 1000)
-USER_GID=$(arch-chroot /mnt id -g "$USERNAME" 2>/dev/null || echo 1000)
+  # ── Extra disk fstab entries ──────────────────────────────
+  USER_UID=$(arch-chroot /mnt id -u "$USERNAME" 2>/dev/null || echo 1000)
+  USER_GID=$(arch-chroot /mnt id -g "$USERNAME" 2>/dev/null || echo 1000)
 
-while true; do
-  # candidates: partitions with a filesystem, not mounted, not the install disk
-  mapfile -t EXTRA_CAND < <(lsblk -rpno PATH,FSTYPE,MOUNTPOINT 2>/dev/null | awk -v d="$DISK" \
-    '$2 != "" && $2 != "swap" && $2 != "crypto_LUKS" && $3 == "" && index($1, d) != 1 {print $1}')
+  for ep in $EXTRA_DISKS; do
+    ep_uuid=$(blkid -s UUID -o value "$ep" 2>/dev/null) || continue
+    ep_fs=$(lsblk -drno FSTYPE "$ep" 2>/dev/null)
+    ep_label=$(lsblk -drno LABEL "$ep" 2>/dev/null | tr -c 'a-zA-Z0-9._-' '-')
+    ep_label=${ep_label#-}; ep_label=${ep_label%-}
+    [ -n "$ep_label" ] || ep_label="data-${ep_uuid:0:4}"
+    while [ -e "/mnt/$ep_label" ]; do ep_label="$ep_label-${ep_uuid:0:4}"; done
+    mkdir -p "/mnt/$ep_label"
 
-  # hide ones we've already added
-  FRESH_CAND=()
-  for part in "${EXTRA_CAND[@]}"; do
-    skip=false
-    for done_part in "${EXTRA_ADDED[@]:-}"; do
-      [ "$part" = "$done_part" ] && skip=true && break
-    done
-    $skip || FRESH_CAND+=("$part")
+    case "$ep_fs" in
+      ext4)    ep_line="UUID=$ep_uuid /$ep_label ext4 defaults,noatime,nofail,x-gvfs-show 0 2" ;;
+      btrfs)   ep_line="UUID=$ep_uuid /$ep_label btrfs defaults,noatime,nofail,x-gvfs-show 0 0" ;;
+      xfs|f2fs) ep_line="UUID=$ep_uuid /$ep_label $ep_fs defaults,noatime,nofail,x-gvfs-show 0 0" ;;
+      vfat|exfat) ep_line="UUID=$ep_uuid /$ep_label $ep_fs uid=$USER_UID,gid=$USER_GID,umask=022,nofail,x-gvfs-show 0 0" ;;
+      ntfs*)   ep_line="UUID=$ep_uuid /$ep_label ntfs3 uid=$USER_UID,gid=$USER_GID,umask=022,nofail,x-gvfs-show 0 0" ;;
+      *)       ep_line="UUID=$ep_uuid /$ep_label $ep_fs defaults,nofail,x-gvfs-show 0 0" ;;
+    esac
+    echo "$ep_line" >> /mnt/etc/fstab
+    ok "Automount: $ep → /$ep_label"
   done
 
-  if [ ${#FRESH_CAND[@]} -eq 0 ]; then
-    [ ${#EXTRA_ADDED[@]:-} -gt 0 ] && ok "All candidate disks handled"
-    break
+  # ── GRUB + initramfs ─────────────────────────────────────
+  arch-chroot /mnt grub-install --target=x86_64-efi --efi-directory=/boot --bootloader-id=GRUB
+
+  if [ "$ENCRYPT_CHOICE" = "yes" ] && [ -n "$LUKS_UUID" ]; then
+    info "Configuring LUKS..."
+    arch-chroot /mnt sed -i 's|^#GRUB_ENABLE_CRYPTODISK=y|GRUB_ENABLE_CRYPTODISK=y|' /etc/default/grub
+    arch-chroot /mnt sh -c "grep -q '^GRUB_ENABLE_CRYPTODISK=' /etc/default/grub || echo 'GRUB_ENABLE_CRYPTODISK=y' >> /etc/default/grub"
+    if arch-chroot /mnt sh -c "grep -q '^HOOKS=.*systemd' /etc/mkinitcpio.conf"; then
+      ENCRYPT_HOOK=sd-encrypt
+      CMDLINE="quiet rd.luks.name=$LUKS_UUID=cryptroot root=/dev/mapper/cryptroot"
+      info "systemd initramfs detected, using sd-encrypt hook"
+    else
+      ENCRYPT_HOOK="encrypt keymap"
+      CMDLINE="quiet cryptdevice=UUID=$LUKS_UUID:cryptroot root=/dev/mapper/cryptroot"
+      info "udev initramfs detected, using encrypt+keymap hooks"
+    fi
+    arch-chroot /mnt sed -i "s|^GRUB_CMDLINE_LINUX_DEFAULT=.*|GRUB_CMDLINE_LINUX_DEFAULT=\"$CMDLINE\"|" /etc/default/grub
+    echo "cryptroot UUID=$LUKS_UUID none luks,discard" > /mnt/etc/crypttab.initramfs
+    if ! arch-chroot /mnt sh -c "grep -q '^HOOKS=.*\\(encrypt\\|sd-encrypt\\)' /etc/mkinitcpio.conf"; then
+      arch-chroot /mnt sed -i "/^HOOKS=/s/ filesystems/ $ENCRYPT_HOOK filesystems/" /etc/mkinitcpio.conf
+      info "Added $ENCRYPT_HOOK hook to mkinitcpio.conf"
+    fi
+    info "HOOKS line: $(arch-chroot /mnt grep '^HOOKS=' /etc/mkinitcpio.conf)"
+    ok "LUKS configured (crypttab + initramfs)"
   fi
 
-  EXTRA_CHOICES=("Done — finish and continue install")
-  for part in "${FRESH_CAND[@]}"; do
-    p_fs=$(lsblk -drno FSTYPE "$part" 2>/dev/null)
-    p_size=$(lsblk -drno SIZE "$part" 2>/dev/null)
-    p_label=$(lsblk -drno LABEL "$part" 2>/dev/null)
-    [ -n "$p_label" ] || p_label="unlabeled"
-    EXTRA_CHOICES+=("$part [$p_fs, $p_size, \"$p_label\"]")
-  done
+  arch-chroot /mnt grub-mkconfig -o /boot/grub/grub.cfg
+  arch-chroot /mnt mkinitcpio -P
+  arch-chroot /mnt systemctl enable NetworkManager
+  ok "Base system configured"
 
-  EXTRA_PICK=$(gum choose "${EXTRA_CHOICES[@]}" \
-    --header "Automount another disk at boot? (pick one, or Done)" --height 15)
-  [[ "$EXTRA_PICK" == Done* ]] && break
-
-  EXTRA_PART="${EXTRA_PICK%% *}"
-  EXTRA_Fstype=$(lsblk -drno FSTYPE "$EXTRA_PART" 2>/dev/null)
-  EXTRA_UUID=$(blkid -s UUID -o value "$EXTRA_PART" 2>/dev/null)
-  [ -z "$EXTRA_UUID" ] && { info "No UUID for $EXTRA_PART, skipping"; continue; }
-
-  MP_NAME=$(lsblk -drno LABEL "$EXTRA_PART" 2>/dev/null | tr -c 'a-zA-Z0-9._-' '-')
-  MP_NAME=${MP_NAME#-}; MP_NAME=${MP_NAME%-}
-  [ -n "$MP_NAME" ] || MP_NAME="data-${EXTRA_UUID:0:4}"
-  while [ -e "/mnt/$MP_NAME" ]; do
-    MP_NAME="$MP_NAME-${EXTRA_UUID:0:4}"
-  done
-  mkdir -p "/mnt/$MP_NAME"
-
-  case "$EXTRA_Fstype" in
-    ext4)   EXTRA_LINE="UUID=$EXTRA_UUID /$MP_NAME ext4 defaults,noatime,nofail,x-gvfs-show 0 2" ;;
-    btrfs)  EXTRA_LINE="UUID=$EXTRA_UUID /$MP_NAME btrfs defaults,noatime,nofail,x-gvfs-show 0 0" ;;
-    xfs|f2fs) EXTRA_LINE="UUID=$EXTRA_UUID /$MP_NAME $EXTRA_Fstype defaults,noatime,nofail,x-gvfs-show 0 0" ;;
-    vfat|exfat) EXTRA_LINE="UUID=$EXTRA_UUID /$MP_NAME $EXTRA_Fstype uid=$USER_UID,gid=$USER_GID,umask=022,nofail,x-gvfs-show 0 0" ;;
-    ntfs*)  EXTRA_LINE="UUID=$EXTRA_UUID /$MP_NAME ntfs3 uid=$USER_UID,gid=$USER_GID,umask=022,nofail,x-gvfs-show 0 0" ;;
-    *)      EXTRA_LINE="UUID=$EXTRA_UUID /$MP_NAME $EXTRA_Fstype defaults,nofail,x-gvfs-show 0 0" ;;
-  esac
-  echo "$EXTRA_LINE" >> /mnt/etc/fstab
-  EXTRA_ADDED+=("$EXTRA_PART")
-  ok "Will automount $EXTRA_PART at /$MP_NAME"
-done
-
-arch-chroot /mnt grub-install --target=x86_64-efi --efi-directory=/boot --bootloader-id=GRUB
-
-# ── LUKS boot config (must happen BEFORE grub-mkconfig + mkinitcpio) ──
-if [ "$ENCRYPT_CHOICE" = "yes" ] && [ -n "$LUKS_UUID" ]; then
-  info "Configuring LUKS in installed system..."
-  arch-chroot /mnt sed -i 's|^#GRUB_ENABLE_CRYPTODISK=y|GRUB_ENABLE_CRYPTODISK=y|' /etc/default/grub
-  arch-chroot /mnt sh -c "grep -q '^GRUB_ENABLE_CRYPTODISK=' /etc/default/grub || echo 'GRUB_ENABLE_CRYPTODISK=y' >> /etc/default/grub"
-  # systemd-based initramfs (base systemd) uses sd-encrypt + rd.luks.name
-  if arch-chroot /mnt sh -c "grep -q '^HOOKS=.*systemd' /etc/mkinitcpio.conf"; then
-    ENCRYPT_HOOK=sd-encrypt
-    CMDLINE="quiet rd.luks.name=$LUKS_UUID=cryptroot root=/dev/mapper/cryptroot"
-    info "systemd initramfs detected, using sd-encrypt hook"
-  else
-    ENCRYPT_HOOK="encrypt keymap"
-    CMDLINE="quiet cryptdevice=UUID=$LUKS_UUID:cryptroot root=/dev/mapper/cryptroot"
-    info "udev initramfs detected, using encrypt+keymap hooks"
+  # ── Persist WiFi ─────────────────────────────────────────
+  if [ -n "$WIFI_SSID" ]; then
+    info "Copying WiFi connection to installed system..."
+    WIFI_UUID="$(nmcli -t -f UUID,DEVICE,TYPE conn show --active 2>/dev/null | grep -F ':wifi' | cut -d: -f1 | head -1)" || true
+    nmcli connection export "${WIFI_UUID:-$WIFI_SSID}" /tmp/arf-wifi.nmconnection 2>/dev/null || true
+    if [ -f /tmp/arf-wifi.nmconnection ]; then
+      cp /tmp/arf-wifi.nmconnection /mnt/etc/NetworkManager/system-connections/
+      chown root:root /mnt/etc/NetworkManager/system-connections/*.nmconnection
+      chmod 600 /mnt/etc/NetworkManager/system-connections/*.nmconnection
+      ok "WiFi connection saved"
+    fi
   fi
-  arch-chroot /mnt sed -i "s|^GRUB_CMDLINE_LINUX_DEFAULT=.*|GRUB_CMDLINE_LINUX_DEFAULT=\"$CMDLINE\"|" /etc/default/grub
-  echo "cryptroot UUID=$LUKS_UUID none luks,discard" > /mnt/etc/crypttab.initramfs
-  if arch-chroot /mnt sh -c "grep -q '^HOOKS=.*\\(encrypt\\|sd-encrypt\\)' /etc/mkinitcpio.conf"; then
-    info "encrypt hook already present in HOOKS line"
-  else
-    arch-chroot /mnt sed -i "/^HOOKS=/s/ filesystems/ $ENCRYPT_HOOK filesystems/" /etc/mkinitcpio.conf
-    info "Added $ENCRYPT_HOOK hook to mkinitcpio.conf"
-  fi
-  info "HOOKS line: $(arch-chroot /mnt grep '^HOOKS=' /etc/mkinitcpio.conf)"
-  ok "LUKS configured (crypttab + initramfs)"
-fi
 
-arch-chroot /mnt grub-mkconfig -o /boot/grub/grub.cfg
-arch-chroot /mnt mkinitcpio -P
-arch-chroot /mnt systemctl enable NetworkManager
+  # ── Copy FrenOS + stage2 service ─────────────────────────
+  info "Copying FrenOS to installed system..."
+  mkdir -p "/mnt/home/$USERNAME/arf-linux"
+  cp -r "$ARF_SRC"/* "/mnt/home/$USERNAME/arf-linux/"
+  chown -R 1000:1000 "/mnt/home/$USERNAME/arf-linux" 2>/dev/null || true
 
-ok "Base system configured"
+  info "Setting up auto-stage2 on first boot..."
+  mkdir -p /mnt/etc/systemd/system
+  {
+    echo "USERNAME=$USERNAME"
+    echo "PARALLEL_DL=$PARALLEL_DL"
+    echo "FS_CHOICE=$FS_CHOICE"
+    echo "ENCRYPTED=$ENCRYPT_CHOICE"
+    echo "ZRAM_CHOICE=$ZRAM_CHOICE"
+    [ -n "$LUKS_UUID" ] && echo "LUKS_UUID=$LUKS_UUID"
+  } > /mnt/etc/arf-linux.env
 
-# ── Persist WiFi connection ───────────────────────────────────
-if [ -n "${WIFI_SSID:-}" ]; then
-  info "Copying WiFi connection to installed system..."
-  WIFI_UUID="$(nmcli -t -f UUID,DEVICE,TYPE conn show --active 2>/dev/null | grep -F ':wifi' | cut -d: -f1 | head -1)" || true
-  nmcli connection export "${WIFI_UUID:-$WIFI_SSID}" /tmp/arf-wifi.nmconnection 2>/dev/null || true
-  if [ -f /tmp/arf-wifi.nmconnection ]; then
-    cp /tmp/arf-wifi.nmconnection /mnt/etc/NetworkManager/system-connections/
-    chown root:root /mnt/etc/NetworkManager/system-connections/*.nmconnection
-    chmod 600 /mnt/etc/NetworkManager/system-connections/*.nmconnection
-    ok "WiFi connection saved to installed system"
-  fi
-fi
-
-# ── Copy FrenOS to installed system ────────────────────────
-info "Copying FrenOS to installed system..."
-mkdir -p /mnt/home/${USERNAME}/arf-linux
-cp -r "$ARF_SRC"/* /mnt/home/${USERNAME}/arf-linux/
-chown -R 1000:1000 /mnt/home/${USERNAME}/arf-linux 2>/dev/null || true
-
-# ── Set up auto-stage2 on first boot ──────────────────────────
-info "Setting up auto-stage2 on first boot..."
-mkdir -p /mnt/etc/systemd/system
-
-echo "USERNAME=${USERNAME}" > /mnt/etc/arf-linux.env
-echo "PARALLEL_DL=${PARALLEL_DL}" >> /mnt/etc/arf-linux.env
-echo "FS_CHOICE=${FS_CHOICE}" >> /mnt/etc/arf-linux.env
-echo "ENCRYPTED=${ENCRYPT_CHOICE}" >> /mnt/etc/arf-linux.env
-echo "ZRAM_CHOICE=${ZRAM_CHOICE}" >> /mnt/etc/arf-linux.env
-[ -n "$LUKS_UUID" ] && echo "LUKS_UUID=${LUKS_UUID}" >> /mnt/etc/arf-linux.env
-
-cat > /mnt/etc/systemd/system/arf-stage2.service <<SERVICE
+  cat > /mnt/etc/systemd/system/arf-stage2.service <<SERVICE
 [Unit]
 Description=FrenOS stage2 (packages + dotfiles)
 After=network-online.target
@@ -423,51 +451,51 @@ StandardOutput=journal+console
 WantedBy=multi-user.target
 SERVICE
 
-mkdir -p /mnt/etc/systemd/system/multi-user.target.wants
-ln -sf /etc/systemd/system/arf-stage2.service /mnt/etc/systemd/system/multi-user.target.wants/arf-stage2.service
+  mkdir -p /mnt/etc/systemd/system/multi-user.target.wants
+  ln -sf /etc/systemd/system/arf-stage2.service /mnt/etc/systemd/system/multi-user.target.wants/arf-stage2.service
 
-# ── Copy bundled SDDM theme to installed system ──────────────
-if [ -d /usr/share/sddm/themes/sddm-flower-theme ]; then
-  mkdir -p /mnt/usr/share/sddm/themes/sddm-flower-theme
-  cp -r /usr/share/sddm/themes/sddm-flower-theme/* /mnt/usr/share/sddm/themes/sddm-flower-theme/
-  ok "Bundled SDDM theme copied to installed system"
-fi
+  # ── SDDM theme ──────────────────────────────────────────
+  if [ -d /usr/share/sddm/themes/sddm-flower-theme ]; then
+    mkdir -p /mnt/usr/share/sddm/themes/sddm-flower-theme
+    cp -r /usr/share/sddm/themes/sddm-flower-theme/* /mnt/usr/share/sddm/themes/sddm-flower-theme/
+    ok "SDDM theme copied"
+  fi
 
-# ── Enable fstrim if SSD ──────────────────────────────────────
-if [ "$IS_SSD" = true ]; then
-  info "Enabling fstrim.timer (SSD detected)"
-  mkdir -p /mnt/etc/systemd/system/timers.target.wants
-  ln -sf /usr/lib/systemd/system/fstrim.timer /mnt/etc/systemd/system/timers.target.wants/fstrim.timer 2>/dev/null || true
-fi
+  # ── fstrim (SSD) ─────────────────────────────────────────
+  if [ "$IS_SSD" = true ]; then
+    mkdir -p /mnt/etc/systemd/system/timers.target.wants
+    ln -sf /usr/lib/systemd/system/fstrim.timer /mnt/etc/systemd/system/timers.target.wants/fstrim.timer 2>/dev/null || true
+    info "fstrim.timer enabled (SSD detected)"
+  fi
 
-# ── Run stage2 in chroot ──────────────────────────────────────
-info "Running stage2 in chroot..."
-cp /etc/resolv.conf /mnt/etc/resolv.conf 2>/dev/null || true
-if arch-chroot /mnt bash -c "
-  export USERNAME=$USERNAME HOME=/home/$USERNAME PARALLEL_DL=$PARALLEL_DL FS_CHOICE=$FS_CHOICE ENCRYPTED=$ENCRYPT_CHOICE LUKS_UUID=$LUKS_UUID ZRAM_CHOICE=$ZRAM_CHOICE
-  bash /home/$USERNAME/arf-linux/install.sh --stage2
-  exit \$?
-" 2>&1; then
-  ok "Stage2 complete"
-else
-  gum style "Stage2 had some errors. The service will retry on first boot." --foreground yellow
-fi
+  # ── Run stage2 in chroot ─────────────────────────────────
+  info "Running stage2 in chroot..."
+  cp /etc/resolv.conf /mnt/etc/resolv.conf 2>/dev/null || true
+  if arch-chroot /mnt bash -c "
+    export USERNAME=$USERNAME HOME=/home/$USERNAME PARALLEL_DL=$PARALLEL_DL FS_CHOICE=$FS_CHOICE ENCRYPTED=$ENCRYPT_CHOICE LUKS_UUID=$LUKS_UUID ZRAM_CHOICE=$ZRAM_CHOICE
+    bash /home/$USERNAME/arf-linux/install.sh --stage2
+  " 2>&1; then
+    ok "Stage2 complete"
+  else
+    gum style "Stage2 had some errors. The service will retry on first boot." --foreground yellow
+  fi
 
-# ── Done ──────────────────────────────────────────────────────
-ok "Installation complete!"
-echo ""
+  # ── Done ─────────────────────────────────────────────────
+  ok "Installation complete!"
 
-do_reboot() {
+  if [ "$INSPECT_CHROOT" = "yes" ]; then
+    info "Entering chroot. Type 'exit' to return."
+    arch-chroot /mnt || true
+  fi
+
   ok "Rebooting now..."
   sleep 2
-  systemctl reboot 2>/dev/null || reboot -f 2>/dev/null || {
-    err "Automatic reboot failed — please reboot manually"
-  }
+  systemctl reboot 2>/dev/null || reboot -f 2>/dev/null || err "Automatic reboot failed — please reboot manually"
 }
 
-if gum confirm "Inspect the install in chroot before rebooting?" --default=false; then
-  info "Entering chroot. Type 'exit' to return."
-  arch-chroot /mnt || true
-fi
-
-do_reboot
+# ── Main ───────────────────────────────────────────────────
+case "$MODE" in
+  --ask) ask ;;
+  --run) run ;;
+  *)     ask && run ;;
+esac

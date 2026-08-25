@@ -41,7 +41,7 @@ Arch Linux automated installer ISO with Hyprland, Quickshell Tokyo Night bar, an
 ```
 arf-linux/               # Installer scripts, dotfiles, patches
   install.sh             # Stage2 post-install script (copied to installed system)
-  packages.txt           # Official + AUR package list
+  packages.txt           # Official + AUR package list (reference mirror of install.sh arrays)
   dotfiles/              # Default configs for hypr, kitty, btop, fastfetch, zsh, etc.
     quickshell-full/     # Full Quickshell config (menu, cliphist, mpd-mpris, etc.)
     firefox/             # Firefox policies (uBlock Origin + Tokyo Night V3)
@@ -50,7 +50,7 @@ arf-linux-iso/           # ISO build profile
   build.sh               # Builds the bootable ISO with archiso
   profiledir/            # archiso config, airootfs overlay, arf-installer
     airootfs/opt/arf-linux/     # Bundled copy of arf-linux/ (copied at build time)
-    airootfs/usr/local/bin/arf-installer  # Stage1 installer (auto-launched on boot)
+    airootfs/usr/local/bin/arf-installer  # Stage1 installer (--ask / --run / both)
 ```
 
 ## Download
