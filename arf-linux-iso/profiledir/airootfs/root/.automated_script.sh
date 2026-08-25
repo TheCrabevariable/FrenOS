@@ -19,3 +19,8 @@ if [ -f /usr/local/bin/arf-installer ]; then
 
   /usr/local/bin/arf-installer
 fi
+
+# Safety net: if installer didn't reboot (crash or reboot failed), reboot now
+sync
+sleep 2
+reboot -f

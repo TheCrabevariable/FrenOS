@@ -490,7 +490,8 @@ SERVICE
 
   ok "Rebooting now..."
   sleep 2
-  systemctl reboot 2>/dev/null || reboot -f 2>/dev/null || err "Automatic reboot failed — please reboot manually"
+  sync
+  reboot -f
 }
 
 # ── Main ───────────────────────────────────────────────────
