@@ -31,7 +31,7 @@ DOTFILES="$FOS_DIR/dotfiles"
 for dir in "$DOTFILES"/*/; do
   app="$(basename "$dir")"
   case "$app" in
-    zram|journald|dunst|firefox|grub|sddm|wallpapers) continue ;;
+    dunst|firefox|grub|sddm|wallpapers) continue ;;
     quickshell-full) app="quickshell" ;;
   esac
   target="$HOME/.config/$app"

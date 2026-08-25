@@ -1,11 +1,1 @@
-background = "#1a1b26"
-foreground = "#c0caf5"
-
-border = "#32364a"
-focus_border = "#7aa2f7"
-muted = "#565f89"
-
-directory = "#7dcfff"
-
-status_bg = "#1a1b26"
-status_fg = "#7aa2f7"
+background = "#e1e1e8"\nforeground = "#2e3050"\n\nborder = "#b8b8c8"\nfocus_border = "#5b7fcc"\nmuted = "#888aa0"\n\ndirectory = "#3a9cc0"\n\nstatus_bg = "#d0d0da"\nstatus_fg = "#5b7fcc"\n
