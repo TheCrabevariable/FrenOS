@@ -1,8 +1,9 @@
 {
   "logo": {
     "type": "auto",
-    "source": "~/.config/fastfetch/fren.png",
+    "source": "~/.config/fastfetch/fren1.png",
     "height": 10,
+    "width": 40,
     "color": {
       "1": "38;2;122;162;247",
     },
