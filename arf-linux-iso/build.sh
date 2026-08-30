@@ -25,6 +25,9 @@ cp -r --no-preserve=mode,ownership,xattr "$SCRIPT_DIR/../arf-linux"/* "$ARF_DEST
   echo "   Place the arf-linux directory next to arf-linux-iso/"
   exit 1
 }
+# cp --no-preserve=mode strips exec bits; restore so the stage2
+# systemd service can exec install.sh directly (203/EXEC otherwise).
+chmod +x "$ARF_DEST/install.sh" "$ARF_DEST/scripts"/* 2>/dev/null || true
 # Bundle SDDM theme so install doesn't need GitHub
 echo ":: Bundling SDDM theme..."
 SDDM_DEST="$PROFILE/airootfs/usr/share/sddm/themes"
