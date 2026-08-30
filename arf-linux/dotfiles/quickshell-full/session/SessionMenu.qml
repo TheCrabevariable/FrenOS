@@ -57,7 +57,7 @@ PanelWindow {
 
   readonly property var actions: [
     { icon: "\uf023", label: "Lock",     cmd: ["hyprlock"],                     hoverColor: theme.accentCyan },
-    { icon: "\uf08b", label: "Logout",   cmd: ["hyprctl", "dispatch", "exit"],  hoverColor: theme.accentPrimary },
+    { icon: "\uf08b", label: "Logout",   cmd: ["hyprctl", "dispatch", "hl.dsp.exit()"],  hoverColor: theme.accentPrimary },
     { icon: "\uf186", label: "Suspend",  cmd: ["systemctl", "suspend"],         hoverColor: theme.accentOrange },
     { icon: "\uf021", label: "Reboot",   cmd: ["systemctl", "reboot"],          hoverColor: theme.accentGreen },
     { icon: "\uf011", label: "Shutdown", cmd: ["systemctl", "poweroff"],        hoverColor: theme.accentRed }
