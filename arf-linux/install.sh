@@ -52,18 +52,20 @@ run_flatpak_apps() {
 
   local okall="yes"
 
-  # On first boot the network may not be up yet — wait up to 90s for it.
-  info "Waiting for network (up to 90s)..."
+  # On first boot the saved network is not up yet: the user logs into the
+  # desktop and connects wifi via the quickshell popup. Wait up to 5 min for
+  # NetworkManager to report a connection (checked every 10s).
+  info "Waiting for network (up to 5 min)... connect wifi/ethernet when logged in"
   local netup="no"
-  for _ in $(seq 1 9); do
-    if getent hosts dl.flathub.org &>/dev/null; then
+  for _ in $(seq 1 30); do
+    if nmcli -t -f STATE g 2>/dev/null | grep -q "^connected$"; then
       netup="yes"
       break
     fi
     sleep 10
   done
   if [ "$netup" != "yes" ]; then
-    info "Network not available — flatpak apps skipped (retry via Bazaar)"
+    info "Network not available — flatpak apps skipped (service retries next boot)"
     return 1
   fi
 

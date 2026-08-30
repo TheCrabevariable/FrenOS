@@ -437,8 +437,6 @@ HOSTS
   cat > /mnt/etc/systemd/system/arf-stage2.service <<SERVICE
 [Unit]
 Description=FrenOS stage2 (packages + dotfiles)
-After=network-online.target
-Wants=network-online.target
 
 [Service]
 Type=oneshot
