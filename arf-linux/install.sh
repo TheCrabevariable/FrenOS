@@ -43,18 +43,54 @@ stage1() {
 
 # Flatpak apps (ProtonPlus: Proton/Wine tool manager, Flatseal: permission editor)
 # Runs on the booted system only — flatpak/bwrap breaks inside the chroot.
+# Network wait + retries: on first boot the service can start before net is up,
+# and flatpak silently fails. Log output so failures are visible.
+# Returns 0 only if every app installed cleanly.
 run_flatpak_apps() {
   command -v flatpak &>/dev/null || return 0
   [ -d /run/archiso ] && return 0
+
+  local okall="yes"
+
+  # On first boot the network may not be up yet — wait up to 90s for it.
+  info "Waiting for network (up to 90s)..."
+  local netup="no"
+  for _ in $(seq 1 9); do
+    if getent hosts dl.flathub.org &>/dev/null; then
+      netup="yes"
+      break
+    fi
+    sleep 10
+  done
+  if [ "$netup" != "yes" ]; then
+    info "Network not available — flatpak apps skipped (retry via Bazaar)"
+    return 1
+  fi
+
   info "Setting up Flathub remote"
-  flatpak remote-add --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo 2>/dev/null || true
+  flatpak remote-add --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo 2>&1 || info "Remote-add failed (will retry with install)"
+
   for fp_app in com.vysp3r.ProtonPlus com.github.tchx84.Flatseal; do
-    if flatpak install -y --noninteractive flathub "$fp_app"; then
-      ok "Installed Flatpak app: $fp_app"
+    local installed="no"
+    for attempt in 1 2 3; do
+      if flatpak install -y --noninteractive flathub "$fp_app" 2>&1; then
+        ok "Installed Flatpak app: $fp_app"
+        installed="yes"
+        break
+      else
+        info "Flatpak install $fp_app attempt $attempt/3 failed"
+        sleep 10
+      fi
+    done
+    if [ "$installed" = "yes" ]; then
+      :
     else
-      info "Flatpak app failed (non-fatal, retry via Bazaar): $fp_app"
+      info "Flatpak app $fp_app failed after 3 tries (retry via Bazaar)"
+      okall="no"
     fi
   done
+
+  [ "$okall" = "yes" ]
 }
 
 # ── Stage 2: First boot (pkg install) ──────────────────────────
@@ -63,11 +99,14 @@ stage2() {
   # first-boot pass: just finish what can't run inside the chroot.
   if [ -f /var/lib/frenos/stage2-complete ]; then
     info "Stage 2 already done — running post-install pass (Flathub apps)"
-    run_flatpak_apps
-    rm -f /etc/systemd/system/multi-user.target.wants/arf-stage2.service
-    rm -f /etc/systemd/system/arf-stage2.service
-    rm -f /etc/arf-linux.env
-    ok "Post-install pass complete!"
+    if run_flatpak_apps; then
+      rm -f /etc/systemd/system/multi-user.target.wants/arf-stage2.service
+      rm -f /etc/systemd/system/arf-stage2.service
+      rm -f /etc/arf-linux.env
+      ok "Post-install pass complete!"
+    else
+      info "Flatpak apps incomplete — arf-stage2 will retry on next boot"
+    fi
     return
   fi
 

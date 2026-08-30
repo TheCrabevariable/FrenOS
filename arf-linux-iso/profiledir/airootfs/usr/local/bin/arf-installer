@@ -444,7 +444,6 @@ Wants=network-online.target
 Type=oneshot
 EnvironmentFile=/etc/arf-linux.env
 ExecStart=/home/${USERNAME}/arf-linux/install.sh --stage2
-ExecStartPost=/usr/bin/systemctl disable arf-stage2.service
 StandardOutput=journal+console
 
 [Install]
