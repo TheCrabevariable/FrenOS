@@ -327,7 +327,12 @@ MIRROR
   # ── fstab ────────────────────────────────────────────────
   info "Configuring installed system..."
   genfstab -U /mnt >> /mnt/etc/fstab
-  [ -n "$SWAP_FSTAB" ] && echo "$SWAP_FSTAB" >> /mnt/etc/fstab
+  # genfstab already captures active swaps from /proc/swaps — only add
+  # the swapfile entry manually if it didn't (avoids duplicates).
+  if [ -n "$SWAP_FSTAB" ]; then
+    SWAP_PATH=$(awk '{print $1}' <<<"$SWAP_FSTAB")
+    grep -qF "$SWAP_PATH" /mnt/etc/fstab || echo "$SWAP_FSTAB" >> /mnt/etc/fstab
+  fi
 
   arch-chroot /mnt ln -sf "/usr/share/zoneinfo/$TIMEZONE" /etc/localtime
   arch-chroot /mnt hwclock --systohc

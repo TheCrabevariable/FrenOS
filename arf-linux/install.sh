@@ -486,10 +486,11 @@ SDDM
     info "Configuring snapper for btrfs..."
     # /.snapshots is already the @snapshots subvolume, so snapper's
     # create-config would fail ("subvolume .snapshots already exists").
-    # Write the config manually instead.
+    # Try it anyway; fall back to writing the config manually.
     mkdir -p /etc/snapper/configs
     if [ ! -f /etc/snapper/configs/root ]; then
-      cat > /etc/snapper/configs/root << 'SNAPPER'
+      if ! snapper --no-dbus -c root create-config / 2>/dev/null; then
+        cat > /etc/snapper/configs/root << 'SNAPPER'
 # subvolume
 SUBVOLUME="/"
 FSTYPE="btrfs"
@@ -514,14 +515,32 @@ TIMELINE_LIMIT_YEARLY="0"
 EMPTY_PRE_POST_CLEANUP="yes"
 EMPTY_PRE_POST_MIN_AGE="1800"
 SNAPPER
-      chmod 600 /etc/snapper/configs/root
-      info "Wrote /etc/snapper/configs/root"
+        chmod 600 /etc/snapper/configs/root
+        info "Wrote /etc/snapper/configs/root manually"
+      else
+        info "snapper create-config succeeded"
+      fi
     fi
     # Take initial "clean install" snapshot
     snapper --no-dbus -c root create -d "Clean install" --print-number 2>/dev/null || true
     systemctl enable --now snapper-timeline.timer 2>/dev/null || true
     systemctl enable --now snapper-cleanup.timer 2>/dev/null || true
     systemctl enable snapper-boot.service 2>/dev/null || true
+    # grub-btrfs keeps the GRUB menu in sync whenever a snapshot appears.
+    systemctl enable --now grub-btrfsd 2>/dev/null || true
+    # Watch the generated btrfs entries so the menu regenerates on snapshot
+    # changes even across plain journald/snapper runs.
+    if [ ! -f /etc/systemd/system/grub-btrfs.path ]; then
+      cat > /etc/systemd/system/grub-btrfs.path <<'GRUBPATH'
+[Unit]
+Description=Watch for grub-btrfs.cfg changes to regenerate the GRUB menu
+[Path]
+PathModified=/boot/grub/grub-btrfs.cfg
+[Install]
+WantedBy=multi-user.target
+GRUBPATH
+      systemctl enable grub-btrfs.path 2>/dev/null || true
+    fi
     # Regenerate GRUB so grub-btrfs picks up the snapshot
     grub-mkconfig -o /boot/grub/grub.cfg 2>/dev/null || true
     ok "Snapper configured, initial snapshot created"
