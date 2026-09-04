@@ -17,6 +17,7 @@ Item {
   property string wifiIface: ""
   property bool showPassword: false
   property var pendingNetwork: null
+  property int pendingIndex: -1
 
   function refreshScan() {
     root.scanning = true
@@ -94,7 +95,7 @@ Item {
     stdout: StdioCollector {
       onStreamFinished: {
         root.showPassword = false
-        root.pendingNetwork = null
+        root.pendingNetwork = null; root.pendingIndex = -1
         root.refreshScan()
       }
     }
@@ -106,7 +107,7 @@ Item {
 
   Process {
     id: wifiDisconnectProc
-    command: ["sh", "-c", "nmcli -t -f NAME,TYPE connection show --active 2>/dev/null | grep ':wifi$' | cut -d: -f1 | head -1 | xargs -I{} nmcli connection down \"{}\" 2>&1"]
+    command: ["sh", "-c", "nmcli -t -f NAME,TYPE connection show --active 2>/dev/null | grep ':802-11-wireless$' | cut -d: -f1 | head -1 | xargs -I{} nmcli connection down \"{}\" 2>&1"]
     stdout: StdioCollector {
       onStreamFinished: { root.refreshScan() }
     }
@@ -706,13 +707,22 @@ Item {
 
             Layout.fillWidth: true
             Layout.leftMargin: 8; Layout.rightMargin: 8
-            Layout.preferredHeight: 44
+            Layout.preferredHeight: root.pendingIndex === index ? 172 : 44
             radius: 8
             color: netArea.containsMouse ? root.theme.bgHover :
                    modelData.connected ? root.theme.bgSelected : "transparent"
 
-            RowLayout {
+            Behavior on Layout.preferredHeight { NumberAnimation { duration: 150 } }
+
+            Item {
               anchors.fill: parent
+
+            RowLayout {
+              id: netRow
+              anchors.top: parent.top
+              anchors.left: parent.left
+              anchors.right: parent.right
+              height: 44
               anchors.leftMargin: 10; anchors.rightMargin: 10
               spacing: 8
 
@@ -775,36 +785,38 @@ Item {
                   }
                 }
               }
-            }
 
-            // Disconnect button (outside RowLayout, above netArea)
-            Rectangle {
-              width: 24; height: 24; radius: 6
-              anchors.right: parent.right; anchors.rightMargin: 10; anchors.verticalCenter: parent.verticalCenter
-              z: 3
-              color: netDisconnectArea.containsMouse ? root.theme.bgHover : "transparent"
-              visible: modelData.connected
+              // Disconnect button
+              Rectangle {
+                width: 24; height: 24; radius: 6
+                color: netDisconnectArea.containsMouse ? root.theme.bgHover : "transparent"
+                visible: modelData.connected
 
-              Text {
-                anchors.centerIn: parent
-                text: "󰅖"
-                color: root.theme.textSecondary
-                font.pixelSize: 12
-                font.family: root.font
-              }
+                Text {
+                  anchors.centerIn: parent
+                  text: "󰅖"
+                  color: root.theme.textSecondary
+                  font.pixelSize: 12
+                  font.family: root.font
+                }
 
-              MouseArea {
-                id: netDisconnectArea
-                anchors.fill: parent
-                hoverEnabled: true
-                cursorShape: Qt.PointingHandCursor
-                onClicked: root.disconnectWifi()
+                MouseArea {
+                  id: netDisconnectArea
+                  anchors.fill: parent
+                  hoverEnabled: true
+                  cursorShape: Qt.PointingHandCursor
+                  onClicked: root.disconnectWifi()
+                }
               }
             }
 
+            // Click area (top row only)
             MouseArea {
               id: netArea
-              anchors.fill: parent
+              anchors.top: parent.top
+              anchors.left: parent.left
+              anchors.right: parent.right
+              height: 44
               hoverEnabled: true
               cursorShape: Qt.PointingHandCursor
               onClicked: {
@@ -813,6 +825,7 @@ Item {
                   root.disconnectWifi()
                 } else if (net.security && net.security.length > 0 && net.security !== "--") {
                   root.pendingNetwork = net
+                  root.pendingIndex = netDelegate.index
                   root.showPassword = true
                   passwordInput.text = ""
                   passwordInput.forceActiveFocus()
@@ -821,8 +834,119 @@ Item {
                 }
               }
             }
+
+            // Per-network password prompt
+            Rectangle {
+              anchors.top: netRow.bottom
+              anchors.topMargin: 4
+              anchors.left: parent.left
+              anchors.right: parent.right
+              anchors.leftMargin: 10; anchors.rightMargin: 10
+              height: showPwCol.implicitHeight + 16
+              radius: 8
+              color: root.theme.bgSurface
+              visible: root.pendingIndex === index
+              border.color: root.theme.accentPrimary
+              border.width: 1
+              clip: true
+
+              Behavior on height { NumberAnimation { duration: 150 } }
+
+              ColumnLayout {
+                id: showPwCol
+                anchors.fill: parent
+                anchors.margins: 10
+                spacing: 6
+
+                Text {
+                  text: "Password for " + netDelegate.modelData.ssid
+                  color: root.theme.textPrimary
+                  font.pixelSize: 11
+                  font.family: root.font
+                  font.bold: true
+                  elide: Text.ElideRight
+                  Layout.fillWidth: true
+                }
+
+                Rectangle {
+                  Layout.fillWidth: true
+                  height: 32
+                  radius: 6
+                  color: root.theme.bgBase
+                  border.color: passwordInput.activeFocus ? root.theme.accentPrimary : root.theme.bgBorder
+                  border.width: 1
+
+                  TextInput {
+                    id: passwordInput
+                    anchors.fill: parent
+                    anchors.margins: 8
+                    color: root.theme.textPrimary
+                    font.pixelSize: 12
+                    font.family: root.font
+                    echoMode: TextInput.Password
+                    clip: true
+
+                    Keys.onReturnPressed: root.submitPassword(netDelegate.modelData.ssid, passwordInput.text)
+                    Keys.onEscapePressed: { root.showPassword = false; root.pendingNetwork = null; root.pendingIndex = -1 }
+                  }
+                }
+
+                RowLayout {
+                  spacing: 6
+                  Item { Layout.fillWidth: true }
+
+                  Rectangle {
+                    width: cancelPwLabel.implicitWidth + 12; height: 24; radius: 6
+                    color: cancelPwArea.containsMouse ? root.theme.bgHover : "transparent"
+                    border.color: root.theme.bgBorder; border.width: 1
+
+                    Text {
+                      id: cancelPwLabel
+                      anchors.centerIn: parent
+                      text: "Cancel"
+                      color: root.theme.textSecondary
+                      font.pixelSize: 10
+                      font.family: root.font
+                    }
+
+                    MouseArea {
+                      id: cancelPwArea
+                      anchors.fill: parent
+                      hoverEnabled: true
+                      cursorShape: Qt.PointingHandCursor
+                      onClicked: { root.showPassword = false; root.pendingNetwork = null; root.pendingIndex = -1 }
+                    }
+                  }
+
+                  Rectangle {
+                    width: connectPwLabel.implicitWidth + 12; height: 24; radius: 6
+                    color: connectPwArea.containsMouse ? root.theme.accentPrimary : "transparent"
+                    border.color: root.theme.accentPrimary; border.width: 1
+
+                    Text {
+                      id: connectPwLabel
+                      anchors.centerIn: parent
+                      text: "Connect"
+                      color: connectPwArea.containsMouse ? root.theme.bgBase : root.theme.accentPrimary
+                      font.pixelSize: 10
+                      font.family: root.font
+                      font.bold: true
+                    }
+
+                    MouseArea {
+                      id: connectPwArea
+                      anchors.fill: parent
+                      hoverEnabled: true
+                      cursorShape: Qt.PointingHandCursor
+                      onClicked: root.submitPassword(netDelegate.modelData.ssid, passwordInput.text)
+                    }
+                  }
+                }
+              }
+            }
           }
         }
+      }
 
         // Empty state
         Rectangle {
@@ -839,113 +963,6 @@ Item {
             color: root.theme.textMuted
             font.pixelSize: 12
             font.family: root.font
-          }
-        }
-
-        // Password prompt
-        Rectangle {
-          Layout.fillWidth: true
-          Layout.leftMargin: 8; Layout.rightMargin: 8
-          Layout.preferredHeight: root.showPassword ? showPwCol.implicitHeight + 16 : 0
-          radius: 8
-          color: root.theme.bgSurface
-          visible: root.showPassword
-          border.color: root.theme.accentPrimary
-          border.width: 1
-          clip: true
-
-          Behavior on Layout.preferredHeight { NumberAnimation { duration: 150 } }
-
-          ColumnLayout {
-            id: showPwCol
-            anchors.fill: parent
-            anchors.margins: 10
-            spacing: 6
-
-            Text {
-              text: "Password for " + (root.pendingNetwork ? root.pendingNetwork.ssid : "")
-              color: root.theme.textPrimary
-              font.pixelSize: 11
-              font.family: root.font
-              font.bold: true
-              elide: Text.ElideRight
-              Layout.fillWidth: true
-            }
-
-            Rectangle {
-              Layout.fillWidth: true
-              height: 32
-              radius: 6
-              color: root.theme.bgBase
-              border.color: passwordInput.activeFocus ? root.theme.accentPrimary : root.theme.bgBorder
-              border.width: 1
-
-              TextInput {
-                id: passwordInput
-                anchors.fill: parent
-                anchors.margins: 8
-                color: root.theme.textPrimary
-                font.pixelSize: 12
-                font.family: root.font
-                echoMode: TextInput.Password
-                clip: true
-
-                Keys.onReturnPressed: submitPassword()
-                Keys.onEscapePressed: { root.showPassword = false; root.pendingNetwork = null }
-              }
-            }
-
-            RowLayout {
-              spacing: 6
-              Item { Layout.fillWidth: true }
-
-              Rectangle {
-                width: cancelPwLabel.implicitWidth + 12; height: 24; radius: 6
-                color: cancelPwArea.containsMouse ? root.theme.bgHover : "transparent"
-                border.color: root.theme.bgBorder; border.width: 1
-
-                Text {
-                  id: cancelPwLabel
-                  anchors.centerIn: parent
-                  text: "Cancel"
-                  color: root.theme.textSecondary
-                  font.pixelSize: 10
-                  font.family: root.font
-                }
-
-                MouseArea {
-                  id: cancelPwArea
-                  anchors.fill: parent
-                  hoverEnabled: true
-                  cursorShape: Qt.PointingHandCursor
-                  onClicked: { root.showPassword = false; root.pendingNetwork = null }
-                }
-              }
-
-              Rectangle {
-                width: connectPwLabel.implicitWidth + 12; height: 24; radius: 6
-                color: connectPwArea.containsMouse ? root.theme.accentPrimary : "transparent"
-                border.color: root.theme.accentPrimary; border.width: 1
-
-                Text {
-                  id: connectPwLabel
-                  anchors.centerIn: parent
-                  text: "Connect"
-                  color: connectPwArea.containsMouse ? root.theme.bgBase : root.theme.accentPrimary
-                  font.pixelSize: 10
-                  font.family: root.font
-                  font.bold: true
-                }
-
-                MouseArea {
-                  id: connectPwArea
-                  anchors.fill: parent
-                  hoverEnabled: true
-                  cursorShape: Qt.PointingHandCursor
-                  onClicked: submitPassword()
-                }
-              }
-            }
           }
         }
 
@@ -1247,11 +1264,12 @@ Item {
     }
   }
 
-  function submitPassword() {
-    if (root.pendingNetwork && passwordInput.text.length > 0) {
-      root.connectWifiPsk(root.pendingNetwork.ssid, passwordInput.text)
+  function submitPassword(ssid, password) {
+    if (ssid && password && password.length > 0) {
+      root.connectWifiPsk(ssid, password)
     }
     root.showPassword = false
-    root.pendingNetwork = null
+    root.pendingNetwork = null; root.pendingIndex = -1
+    root.pendingIndex = -1
   }
 }
