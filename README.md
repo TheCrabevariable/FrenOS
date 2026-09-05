@@ -93,6 +93,8 @@ Requires `archiso` on an Arch Linux system. Output: `out/frenos-<YYYY.MM>-x86_64
 
 <img width="1920" height="1080" alt="image" src="https://github.com/user-attachments/assets/2efcb061-0d66-4ef7-89d7-7b19233fdac6" />
 
+<img width="1921" height="1080" alt="image" src="https://github.com/user-attachments/assets/c373f4aa-c37c-4899-b5c9-89cf64810fc6" />
+
 ## Keybinds
 
 | Key | Action |
