@@ -11,9 +11,27 @@ set -euo pipefail
 # A GUI frontend writes its own answers file and calls --run.
 
 # ── Helpers ────────────────────────────────────────────────
+LOG_FILE="/tmp/arf-install.log"
 info()  { gum style ":: $*" --foreground "#00ffff"; }
 ok()    { gum style "==> $*" --foreground "#00ff00" --bold; }
 err()   { gum style "==> $*" --foreground "#ff0000" --bold >&2; exit 1; }
+# With set -e, a failing command in run() would exit silently; trap it so we
+# can see exactly where the install died instead of a frozen screen.
+_failed="no"
+trap '_failed="yes"
+      status=$?
+      line=$LINENO
+      cmd=$BASH_COMMAND
+      echo -e "\\n[INSTALL FAILED] exit=$status at line $line: $cmd" >> "$LOG_FILE"
+      gum style "==> Install FAILED at line $line: $cmd (see $LOG_FILE)" --foreground "#ff0000" --bold >&2
+      exit 1' ERR
+trap '[ "$_failed" = "yes" ] || { info "Log saved to $LOG_FILE"; }' EXIT
+# Start tee-logging. Only called from run(); must not run in ask() since
+# gum needs a real TTY for its interactive prompts.
+start_logging() {
+  exec > >(tee -a "$LOG_FILE")
+  exec 2>&1
+}
 
 # ── Mode ───────────────────────────────────────────────────
 MODE="${1:-all}"
@@ -185,6 +203,7 @@ ask() {
 # RUN PHASE — all actions, zero prompts, reads answers file
 # ════════════════════════════════════════════════════════════
 run() {
+  start_logging
   [ -f "$ANSWERS_FILE" ] || err "No answers file: $ANSWERS_FILE"
   # shellcheck disable=SC1090
   . "$ANSWERS_FILE"
@@ -335,7 +354,7 @@ MIRROR
   fi
 
   arch-chroot /mnt ln -sf "/usr/share/zoneinfo/$TIMEZONE" /etc/localtime
-  arch-chroot /mnt hwclock --systohc
+  arch-chroot /mnt hwclock --systohc || info "hwclock failed (non-fatal) — will set time on first boot"
 
   sed -i 's/^#en_US.UTF-8/en_US.UTF-8/' /mnt/etc/locale.gen
   arch-chroot /mnt locale-gen
