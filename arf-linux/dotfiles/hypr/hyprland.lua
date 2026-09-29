@@ -9,6 +9,17 @@ if f then
   end
 end
 
+-- Keyboard layout: written by the FrenOS installer to ~/.config/hypr/kb_layout
+-- Falls back to "us" when the file is absent (e.g. manual setup).
+local kbf = os.getenv("HOME") .. "/.config/hypr/kb_layout"
+local kb_layout = "us"
+local kbh = io.open(kbf, "r")
+if kbh then
+  local val = kbh:read("*l")
+  kbh:close()
+  if val and val ~= "" then kb_layout = val end
+end
+
 -- Autostart
 hl.on("hyprland.start", function()
   -- Also apply on fresh startup (Wayland socket is ready here)
@@ -34,7 +45,7 @@ hl.on("hyprland.start", function()
   -- Input config (hl.config uses native Lua — no legacy parser needed)
   hl.config({
     input = {
-      kb_layout = "us",
+      kb_layout = kb_layout,
       follow_mouse = 1,
       sensitivity = 0,
       touchpad = { natural_scroll = false, disable_while_typing = false }

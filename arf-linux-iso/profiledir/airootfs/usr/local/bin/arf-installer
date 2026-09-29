@@ -40,24 +40,46 @@ ANSWERS_FILE="/tmp/arf-answers.env"
 
 gum style --border double --padding "1 2" --foreground "#00ffff" --bold "FrenOS Installer"
 
-# ── Keyboard layout (always runs first) ───────────────────
-info "Loading keyboard layouts..."
-KBD_LAYOUT=$(find /usr/share/kbd/keymaps -name "*.map.gz" | sed 's|.*/||;s|\.map\.gz||' | sort | gum filter --placeholder "Type to search (e.g. us, de, fr)..." --header "Select keyboard layout" --height 15)
-[ -z "$KBD_LAYOUT" ] && KBD_LAYOUT="us"
-loadkeys "$KBD_LAYOUT" 2>/dev/null || true
-ok "Keyboard layout: $KBD_LAYOUT"
-
 # ════════════════════════════════════════════════════════════
 # ASK PHASE — all prompts, zero side-effects beyond loadkeys
 # ════════════════════════════════════════════════════════════
 ask() {
+  # ── Keyboard layout (always runs first) ───────────────────
+  info "Loading keyboard layouts..."
+  KBD_LAYOUT=$(find /usr/share/kbd/keymaps -name "*.map.gz" | sed 's|.*/||;s|\.map\.gz||' | sort | gum filter --placeholder "Type to search (e.g. us, de, fr)..." --header "Select keyboard layout" --height 15)
+  [ -z "$KBD_LAYOUT" ] && KBD_LAYOUT="us"
+  loadkeys "$KBD_LAYOUT" 2>/dev/null || true
+  ok "Keyboard layout: $KBD_LAYOUT"
 
   # ── Detect FrenOS source ─────────────────────────────────
   ARF_SRC="/opt/arf-linux"
   [ -d "$ARF_SRC" ] || err "FrenOS source not found at /opt/arf-linux"
 
   # ── Disk selection ───────────────────────────────────────
-  DISK=$(lsblk -dpno NAME,SIZE,MODEL | grep -v loop | gum choose --header "Select install disk" | awk '{print $1}')
+  # Removable devices are hidden by default: on an ISO boot that includes the
+  # boot USB itself, and wiping the medium you are installing from bricks the
+  # install. If every disk is removable we fall back to showing them all with
+  # an explicit warning rather than offering nothing.
+  DISK_LIST=()
+  DISK_HIDDEN=()
+  while read -r d size model; do
+    [ -n "$d" ] || continue
+    dbase=$(basename "$d")
+    case "$dbase" in loop*|ram*|zram*|sr*|dm-*) continue ;; esac
+    if [ -f "/sys/block/$dbase/removable" ] && [ "$(cat "/sys/block/$dbase/removable")" = "1" ]; then
+      DISK_HIDDEN+=("$d ${size:-?} ${model:-}")
+      continue
+    fi
+    DISK_LIST+=("$d ${size:-?} ${model:-}")
+  done < <(lsblk -dpno NAME,SIZE,MODEL 2>/dev/null)
+
+  if [ ${#DISK_LIST[@]} -eq 0 ] && [ ${#DISK_HIDDEN[@]} -gt 0 ]; then
+    gum style "---\nEvery disk is removable.\n---\nDo NOT pick the USB you booted from." --foreground "#ff8800" --bold >&2
+    DISK_LIST+=("${DISK_HIDDEN[@]}")
+  fi
+
+  [ ${#DISK_LIST[@]} -gt 0 ] || err "No install disk found (no fixed disks attached?)"
+  DISK=$(gum choose "${DISK_LIST[@]}" --header "Select install disk — removable hidden unless nothing else exists" --height 10 | awk '{print $1}')
   [ -z "$DISK" ] && err "No disk selected"
   [ ! -b "$DISK" ] && err "Not a block device: $DISK"
 
@@ -211,6 +233,22 @@ run() {
 
   # Validate required
   : "${DISK:?}" "${USERNAME:?}" "${PASSWORD:?}" "${TIMEZONE:?}" "${FS_CHOICE:?}" "${KERNEL:?}"
+
+  # Defaults for the optional answers. A GUI frontend calling --run may omit
+  # any of these, and under `set -u` an unset variable is a fatal error that
+  # kills the install partway through.
+  KBD_LAYOUT="${KBD_LAYOUT:-us}"
+  ENCRYPT_CHOICE="${ENCRYPT_CHOICE:-no}"
+  SUBVOLUMES="${SUBVOLUMES:-no}"
+  SNAPPER="${SNAPPER:-no}"
+  PARALLEL_DL="${PARALLEL_DL:-2}"
+  SWAP_CHOICE="${SWAP_CHOICE:-none}"
+  ZRAM_CHOICE="${ZRAM_CHOICE:-yes}"
+  EXTRA_DISKS="${EXTRA_DISKS:-}"
+  WIFI_SSID="${WIFI_SSID:-}"
+  WIFI_PASS="${WIFI_PASS:-}"
+  LUKS_PASS="${LUKS_PASS:-}"
+  INSPECT_CHROOT="${INSPECT_CHROOT:-no}"
 
   # FrenOS source
   ARF_SRC="/opt/arf-linux"
@@ -382,7 +420,10 @@ HOSTS
     ep_label=$(lsblk -drno LABEL "$ep" 2>/dev/null | tr -c 'a-zA-Z0-9._-' '-')
     ep_label=${ep_label#-}; ep_label=${ep_label%-}
     [ -n "$ep_label" ] || ep_label="data-${ep_uuid:0:4}"
-    while [ -e "/mnt/$ep_label" ]; do ep_label="$ep_label-${ep_uuid:0:4}"; done
+    # Disambiguate collisions with a counter so the name stays readable
+    # (label-abcd-1, label-abcd-2, ...) instead of stacking the same suffix.
+    ep_base="$ep_label"; ep_n=1
+    while [ -e "/mnt/$ep_label" ]; do ep_label="${ep_base}-${ep_uuid:0:4}-$ep_n"; ep_n=$((ep_n+1)); done
     mkdir -p "/mnt/$ep_label"
 
     case "$ep_fs" in
@@ -444,7 +485,9 @@ HOSTS
   # ── Copy FrenOS + stage2 service ─────────────────────────
   info "Copying FrenOS to installed system..."
   mkdir -p "/mnt/home/$USERNAME/arf-linux"
-  cp -r "$ARF_SRC"/* "/mnt/home/$USERNAME/arf-linux/"
+  # "$ARF_SRC/." copies hidden entries too — plain "$ARF_SRC/*" would silently
+  # skip any dotfile at the top level of the source tree.
+  cp -r "$ARF_SRC/." "/mnt/home/$USERNAME/arf-linux/" 2>/dev/null || cp -r "$ARF_SRC"/* "/mnt/home/$USERNAME/arf-linux/"
   chown -R 1000:1000 "/mnt/home/$USERNAME/arf-linux" 2>/dev/null || true
 
   info "Setting up auto-stage2 on first boot..."
@@ -455,6 +498,7 @@ HOSTS
     echo "FS_CHOICE=$FS_CHOICE"
     echo "ENCRYPTED=$ENCRYPT_CHOICE"
     echo "ZRAM_CHOICE=$ZRAM_CHOICE"
+    echo "KBD_LAYOUT=$KBD_LAYOUT"
     [ -n "$LUKS_UUID" ] && echo "LUKS_UUID=$LUKS_UUID"
   } > /mnt/etc/arf-linux.env
 
@@ -493,7 +537,7 @@ SERVICE
   info "Running stage2 in chroot..."
   cp /etc/resolv.conf /mnt/etc/resolv.conf 2>/dev/null || true
   if arch-chroot /mnt bash -c "
-    export USERNAME=$USERNAME HOME=/home/$USERNAME PARALLEL_DL=$PARALLEL_DL FS_CHOICE=$FS_CHOICE ENCRYPTED=$ENCRYPT_CHOICE LUKS_UUID=$LUKS_UUID ZRAM_CHOICE=$ZRAM_CHOICE
+    export USERNAME=$USERNAME HOME=/home/$USERNAME PARALLEL_DL=$PARALLEL_DL FS_CHOICE=$FS_CHOICE ENCRYPTED=$ENCRYPT_CHOICE LUKS_UUID=$LUKS_UUID ZRAM_CHOICE=$ZRAM_CHOICE KBD_LAYOUT=$KBD_LAYOUT
     bash /home/$USERNAME/arf-linux/install.sh --stage2
   " 2>&1; then
     ok "Stage2 complete"
@@ -510,8 +554,19 @@ SERVICE
   fi
 
   ok "Rebooting now..."
-  sleep 2
+
+  # reboot -f is a raw syscall that bypasses systemd, so nothing unmounts for
+  # us. Tear the install mounts down explicitly first — leaving btrfs mounts
+  # dirty is a real corruption risk.
+  info "Disabling swap and unmounting..."
+  swapoff -a 2>/dev/null || true
   sync
+  if ! umount -R /mnt 2>/dev/null; then
+    gum style "==> Normal unmount failed, forcing lazy unmount of /mnt" --foreground "#ff8800" >&2
+    umount -Rl /mnt 2>/dev/null || true
+  fi
+  sync
+  sleep 2
   reboot -f
 }
 

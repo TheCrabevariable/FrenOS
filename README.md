@@ -47,7 +47,7 @@ arf-linux/               # Installer scripts, dotfiles, patches
   dotfiles/              # Default configs for hypr, kitty, btop, fastfetch, zsh, etc.
     quickshell-full/     # Full Quickshell config (menu, cliphist, mpd-mpris, etc.)
     firefox/             # Firefox policies (uBlock Origin + Tokyo Night V3)
-    frenos/              # FrenOS updater script (update-fos)
+    frenos/              # fren-welcome (keybinds cheat sheet app)
 arf-linux-iso/           # ISO build profile
   build.sh               # Builds the bootable ISO with archiso
   profiledir/            # archiso config, airootfs overlay, arf-installer
@@ -87,7 +87,6 @@ Requires `archiso` on an Arch Linux system. Output: `out/frenos-<YYYY.MM>-x86_64
 | `music-dl` | `yt-dlp ...` | Download audio from a URL (mp3 with metadata + thumbnail) |
 | `fren` | TUI file manager | Navigate, copy, move, rename files with vi-style keys |
 | `rmpc` | TUI music player | MPD client with album art, playlist, keybinds |
-| `update-fos` | `git pull` | Pull latest FrenOS dotfiles and configs from GitHub |
 
 ## Screenshots
 

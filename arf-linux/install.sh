@@ -15,6 +15,7 @@ err()   { printf "${RED}==>${NC} %s\n" "$*" >&2; exit 1; }
 # If running inside the ISO-automated flow, these come from /etc/arf-linux.env.
 # If running manually, they default to the current user.
 USERNAME="${USERNAME:-$USER}"
+KBD_LAYOUT="${KBD_LAYOUT:-us}"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 DOTFILES="$SCRIPT_DIR/dotfiles"
 USER_HOME=$(eval echo "~$USERNAME")
@@ -294,12 +295,6 @@ stage2() {
     ok "Restarted user services (session active)"
   fi
 
-  # Install update-fos script
-  if [ -f "$DOTFILES/frenos/update-fos" ]; then
-    cp "$DOTFILES/frenos/update-fos" /usr/local/bin/update-fos
-    chmod +x /usr/local/bin/update-fos
-    ok "Installed update-fos (run 'update-fos' to update FrenOS)"
-  fi
   # Install fren-welcome script
   if [ -f "$DOTFILES/frenos/fren-welcome" ]; then
     cp "$DOTFILES/frenos/fren-welcome" /usr/local/bin/fren-welcome
@@ -366,6 +361,26 @@ stage2() {
     info "Wallpapers set up from bundled files"
   fi
 
+  # ── Keyboard layout ─────────────────────────────────────────────────
+  # The stage1 installer already wrote /etc/vconsole.conf (virtual console).
+  # This covers the two graphical layers:
+  #   - /etc/X11/xorg.conf.d/00-keyboard.conf → SDDM greeter (X11) + X11 apps
+  #   - ~/.config/hypr/kb_layout            → read by hyprland.lua
+  info "Configuring keyboard layout: $KBD_LAYOUT"
+  sudo mkdir -p /etc/X11/xorg.conf.d
+  sudo tee /etc/X11/xorg.conf.d/00-keyboard.conf > /dev/null <<XKB
+Section "InputClass"
+    Identifier "system-keyboard"
+    MatchIsKeyboard "on"
+    Option "XkbLayout" "$KBD_LAYOUT"
+EndSection
+XKB
+  # hyprland.lua reads this file and falls back to "us" when it is absent.
+  mkdir -p "$USER_HOME/.config/hypr"
+  printf '%s\n' "$KBD_LAYOUT" > "$USER_HOME/.config/hypr/kb_layout"
+  chown -R "$USERNAME:" "$USER_HOME/.config/hypr" 2>/dev/null || true
+  ok "Keyboard layout set ($KBD_LAYOUT)"
+
   # ── SDDM theme ──────────────────────────────────────────────────
   local SDDM_THEME="elarun"
   if [ -d /usr/share/sddm/themes/sddm-flower-theme ]; then
@@ -405,10 +420,21 @@ SDDM
 
   # ── GRUB config ──────────────────────────────────────────────────
   info "Configuring GRUB..."
-  cp "$SCRIPT_DIR/dotfiles/grub/fgrub.png" /boot/grub/
-  cp "$SCRIPT_DIR/dotfiles/grub/theme.txt" /boot/grub/
-  sed -i 's|^#\?GRUB_BACKGROUND=.*|GRUB_BACKGROUND=/boot/grub/fgrub.png|' /etc/default/grub
-  sed -i 's|^#\?GRUB_THEME=.*|GRUB_THEME=/boot/grub/theme.txt|' /etc/default/grub
+  # Only reference the bundled GRUB assets if they actually copied — otherwise
+  # /etc/default/grub would point at a file that isn't there. A missing bundle
+  # is skipped quietly, but a failed cp is a real error and stays fatal.
+  if [ -f "$SCRIPT_DIR/dotfiles/grub/fgrub.png" ]; then
+    cp "$SCRIPT_DIR/dotfiles/grub/fgrub.png" /boot/grub/
+    sed -i 's|^#\?GRUB_BACKGROUND=.*|GRUB_BACKGROUND=/boot/grub/fgrub.png|' /etc/default/grub
+  else
+    info "GRUB background not bundled — skipping"
+  fi
+  if [ -f "$SCRIPT_DIR/dotfiles/grub/theme.txt" ]; then
+    cp "$SCRIPT_DIR/dotfiles/grub/theme.txt" /boot/grub/
+    sed -i 's|^#\?GRUB_THEME=.*|GRUB_THEME=/boot/grub/theme.txt|' /etc/default/grub
+  else
+    info "GRUB theme not bundled — skipping"
+  fi
   grep -q '^GRUB_GFXMODE=' /etc/default/grub || echo 'GRUB_GFXMODE=1920x1080,auto' >> /etc/default/grub
   local CMDLINE="loglevel=3"
   if [ "$GPU_VENDOR" = "nvidia" ]; then
@@ -469,7 +495,11 @@ SDDM
   # ── Firefox policies ──────────────────────────────────────────────
   info "Installing Firefox policies..."
   mkdir -p /usr/lib/firefox/distribution
-  cp "$DOTFILES/firefox/policies.json" /usr/lib/firefox/distribution/policies.json
+  if [ -f "$DOTFILES/firefox/policies.json" ]; then
+    cp "$DOTFILES/firefox/policies.json" /usr/lib/firefox/distribution/policies.json
+  else
+    info "Firefox policies.json not found — skipped (uBlock/Tokyo Night not applied)"
+  fi
   # Set DuckDuckGo as default search + restore previous session
   mkdir -p "$USER_HOME/.mozilla/firefox/frenos.default"
   cp "$DOTFILES/firefox/user.js" "$USER_HOME/.mozilla/firefox/frenos.default/user.js"
