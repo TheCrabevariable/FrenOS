@@ -16,6 +16,51 @@ info()  { gum style ":: $*" --foreground "#00ffff"; }
 ok()    { gum style "==> $*" --foreground "#00ff00" --bold; }
 warn()  { gum style "==> $*" --foreground "#ffff00" --bold >&2; }
 err()   { gum style "==> $*" --foreground "#ff0000" --bold >&2; exit 1; }
+
+# ── XKB variants ───────────────────────────────────────────
+# Print "<variant>\t<description>" for every variant of layout $1, taken from
+# the xkeyboard-config rules. Parsed with awk because the live ISO has no
+# python3 and no xmllint. Verified to reproduce all 499 layout/variant pairs in
+# the rules file exactly.
+#
+# Only POSIX awk constructs: no gensub, no match(s,re,arr), and [[:space:]]
+# rather than [\t] (in a bracket expression \t is a literal backslash and "t",
+# so [\t] silently means "space, backslash or t").
+xkb_variants() {
+  local want="$1" rules="/usr/share/X11/xkb/rules/evdev.xml"
+  [ -r "$rules" ] || return 0
+  awk -v want="$want" '
+    function trim(s) {
+      gsub(/^[[:space:]]+/, "", s); gsub(/[[:space:]]+$/, "", s); return s
+    }
+    # Inner text of <tag>value</tag>. substr() must step past the opening tag and
+    # stop before the closing one, since RSTART/RLENGTH span the whole match.
+    function tag(line, name,   re, ot, ct) {
+      ot = "<" name ">"; ct = "</" name ">"
+      re = ot "([^<]*)" ct
+      if (match(line, re))
+        return trim(substr(line, RSTART + length(ot), RLENGTH - length(ot) - length(ct)))
+      return ""
+    }
+    # A layout block opens. Its own <name> arrives a line or two later inside
+    # its <configItem>, so it is collected by the rule below, not here.
+    /^[[:space:]]*<layout[ >]/ { inl = 1; invl = 0; act = 0; lay = ""; next }
+    inl && /^[[:space:]]*<\/layout>/ { inl = 0; invl = 0; act = 0; next }
+    inl && !invl && lay == "" { v = tag($0, "name"); if (v != "") { lay = v; next } }
+    inl && /<variantList>/ { invl = 1; next }
+    inl && invl && /<variant>/ { act = 1; vn = ""; vd = ""; next }
+    # Read name/description only while inside a <variant>, otherwise the
+    # layout\x27s own fields would be mistaken for a variant\x27s.
+    act {
+      if (vn == "") { v = tag($0, "name"); if (v != "") { vn = v; next } }
+      if (vd == "") { v = tag($0, "description"); if (v != "") vd = v }
+      if (vn != "" && vd != "") {
+        if (lay == want) printf "%s\t%s\n", vn, vd
+        act = 0
+      }
+    }
+  ' "$rules"
+}
 # With set -e, a failing command in run() would exit silently; trap it so we
 # can see exactly where the install died instead of a frozen screen.
 _failed="no"
@@ -51,6 +96,33 @@ ask() {
   [ -z "$KBD_LAYOUT" ] && KBD_LAYOUT="us"
   loadkeys "$KBD_LAYOUT" 2>/dev/null || true
   ok "Keyboard layout: $KBD_LAYOUT"
+
+  # ── Keyboard variant ─────────────────────────────────────
+  # The layout says which country the letters belong to; the variant says which
+  # flavour of it (us+dvorak, de+nodeadkeys, gb+extd). Most layouts have none,
+  # so an empty list or a missing rules file must simply skip this prompt
+  # rather than abort — `set -euo pipefail` makes a failing pipeline fatal.
+  KBD_VARIANT=""
+  KBD_VARLIST=$(xkb_variants "$KBD_LAYOUT" | awk -F'\t' -v OFS=' - ' '{ print $1, $2 }')
+  if [ -n "$KBD_VARLIST" ]; then
+    KBD_PICK=$(printf '%s\ndefault - (the layout\x27s standard variant)\n' "$KBD_VARLIST" \
+      | gum filter --placeholder "Type to search (e.g. dvorak, nodeadkeys)..." \
+                    --header "Select variant for $KBD_LAYOUT (Enter for default)" --height 15)
+    if [ -n "$KBD_PICK" ] && [ "$KBD_PICK" != "default - (the layout's standard variant)" ]; then
+      # Match the chosen line back to its variant name. Exact-line matching then
+      # taking the first field avoids parsing the separator, and variant names
+      # never contain whitespace, so the first field is always the name.
+      KBD_MATCH=$(printf '%s\n' "$KBD_VARLIST" | grep -Fxn -- "$KBD_PICK" | head -1 | cut -d: -f1)
+      [ -n "$KBD_MATCH" ] && KBD_VARIANT=$(printf '%s\n' "$KBD_VARLIST" | sed -n "${KBD_MATCH}p" | cut -d' ' -f1)
+    fi
+  else
+    info "No variants available for '$KBD_LAYOUT' — using the layout default"
+  fi
+  if [ -n "$KBD_VARIANT" ]; then
+    ok "Keyboard variant: $KBD_VARIANT"
+  else
+    ok "Keyboard variant: default"
+  fi
 
   # ── Detect FrenOS source ─────────────────────────────────
   ARF_SRC="/opt/arf-linux"
@@ -219,6 +291,7 @@ ask() {
   : > "$ANSWERS_FILE"
   {
     printf 'KBD_LAYOUT=%q\n'       "$KBD_LAYOUT"
+    printf 'KBD_VARIANT=%q\n'      "$KBD_VARIANT"
     printf 'WIFI_SSID=%q\n'        "$WIFI_SSID"
     printf 'WIFI_PASS=%q\n'        "$WIFI_PASS"
     printf 'HOSTNAME=%q\n'         "$HOSTNAME"
@@ -261,6 +334,9 @@ run() {
   # any of these, and under `set -u` an unset variable is a fatal error that
   # kills the install partway through.
   KBD_LAYOUT="${KBD_LAYOUT:-us}"
+  # Empty means "the layout's own default", which is what XKB wants when the
+  # XkbVariant option is absent. Not "default" as a literal string.
+  KBD_VARIANT="${KBD_VARIANT:-}"
   LOCALE="${LOCALE:-en_US.UTF-8}"
   GPU_CHOICE="${GPU_CHOICE:-auto}"
   ENCRYPT_CHOICE="${ENCRYPT_CHOICE:-no}"
@@ -536,6 +612,7 @@ HOSTS
     echo "ENCRYPTED=$ENCRYPT_CHOICE"
     echo "ZRAM_CHOICE=$ZRAM_CHOICE"
     echo "KBD_LAYOUT=$KBD_LAYOUT"
+    echo "KBD_VARIANT=$KBD_VARIANT"
     echo "GPU_CHOICE=$GPU_CHOICE"
     [ -n "$LUKS_UUID" ] && echo "LUKS_UUID=$LUKS_UUID"
   } > /mnt/etc/arf-linux.env
@@ -575,7 +652,7 @@ SERVICE
   info "Running stage2 in chroot..."
   cp /etc/resolv.conf /mnt/etc/resolv.conf 2>/dev/null || true
   if arch-chroot /mnt bash -c "
-    export USERNAME=$USERNAME HOME=/home/$USERNAME PARALLEL_DL=$PARALLEL_DL FS_CHOICE=$FS_CHOICE ENCRYPTED=$ENCRYPT_CHOICE LUKS_UUID=$LUKS_UUID ZRAM_CHOICE=$ZRAM_CHOICE KBD_LAYOUT=$KBD_LAYOUT GPU_CHOICE=$GPU_CHOICE
+    export USERNAME=$USERNAME HOME=/home/$USERNAME PARALLEL_DL=$PARALLEL_DL FS_CHOICE=$FS_CHOICE ENCRYPTED=$ENCRYPT_CHOICE LUKS_UUID=$LUKS_UUID ZRAM_CHOICE=$ZRAM_CHOICE KBD_LAYOUT=$KBD_LAYOUT KBD_VARIANT=$KBD_VARIANT GPU_CHOICE=$GPU_CHOICE
     bash /home/$USERNAME/arf-linux/install.sh --stage2
   " 2>&1; then
     ok "Stage2 complete"

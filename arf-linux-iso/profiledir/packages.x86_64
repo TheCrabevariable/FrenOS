@@ -37,3 +37,7 @@ reflector
 rsync
 gum
 cryptsetup
+# Provides /usr/share/X11/xkb/rules/evdev.xml, which the installer's keyboard
+# variant picker parses. Not pulled in by anything else in this list, so
+# without it the live ISO can only offer layouts, never variants.
+xkeyboard-config

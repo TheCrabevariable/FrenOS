@@ -17,6 +17,7 @@ err()   { printf "${RED}==>${NC} %s\n" "$*" >&2; exit 1; }
 # If running manually, they default to the current user.
 USERNAME="${USERNAME:-$USER}"
 KBD_LAYOUT="${KBD_LAYOUT:-us}"
+KBD_VARIANT="${KBD_VARIANT:-}"
 GPU_CHOICE="${GPU_CHOICE:-auto}"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 DOTFILES="$SCRIPT_DIR/dotfiles"
@@ -386,20 +387,25 @@ stage2() {
   # This covers the two graphical layers:
   #   - /etc/X11/xorg.conf.d/00-keyboard.conf → SDDM greeter (X11) + X11 apps
   #   - ~/.config/hypr/kb_layout            → read by hyprland.lua
-  info "Configuring keyboard layout: $KBD_LAYOUT"
+  info "Configuring keyboard layout: $KBD_LAYOUT${KBD_VARIANT:+ (variant: $KBD_VARIANT)}"
   sudo mkdir -p /etc/X11/xorg.conf.d
-  sudo tee /etc/X11/xorg.conf.d/00-keyboard.conf > /dev/null <<XKB
-Section "InputClass"
-    Identifier "system-keyboard"
-    MatchIsKeyboard "on"
-    Option "XkbLayout" "$KBD_LAYOUT"
-EndSection
-XKB
-  # hyprland.lua reads this file and falls back to "us" when it is absent.
+  # XkbVariant is written only when a variant was chosen. An empty
+  # XkbVariant="" is not equivalent to omitting the option on every X server,
+  # so the line is left out entirely rather than emitted blank.
+  {
+    echo 'Section "InputClass"'
+    echo '    Identifier "system-keyboard"'
+    echo '    MatchIsKeyboard "on"'
+    echo "    Option \"XkbLayout\" \"$KBD_LAYOUT\""
+    [ -n "$KBD_VARIANT" ] && echo "    Option \"XkbVariant\" \"$KBD_VARIANT\""
+    echo 'EndSection'
+  } | sudo tee /etc/X11/xorg.conf.d/00-keyboard.conf > /dev/null
+  # hyprland.lua reads these and falls back to "us"/default when absent.
   mkdir -p "$USER_HOME/.config/hypr"
   printf '%s\n' "$KBD_LAYOUT" > "$USER_HOME/.config/hypr/kb_layout"
+  printf '%s\n' "$KBD_VARIANT" > "$USER_HOME/.config/hypr/kb_variant"
   chown -R "$USERNAME:" "$USER_HOME/.config/hypr" 2>/dev/null || true
-  ok "Keyboard layout set ($KBD_LAYOUT)"
+  ok "Keyboard layout set ($KBD_LAYOUT${KBD_VARIANT:+/$KBD_VARIANT})"
 
   # ── SDDM theme ──────────────────────────────────────────────────
   local SDDM_THEME="elarun"

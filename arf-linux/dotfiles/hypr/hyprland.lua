@@ -20,6 +20,17 @@ if kbh then
   if val and val ~= "" then kb_layout = val end
 end
 
+-- Keyboard variant (us+dvorak, de+nodeadkeys, ...). Stays empty when the
+-- installer recorded none, which tells Hyprland to use the layout's default.
+local kb_variant = ""
+local kbfv = os.getenv("HOME") .. "/.config/hypr/kb_variant"
+local kbvh = io.open(kbfv, "r")
+if kbvh then
+  local val = kbvh:read("*l")
+  kbvh:close()
+  if val then kb_variant = val end
+end
+
 -- Autostart
 hl.on("hyprland.start", function()
   -- Also apply on fresh startup (Wayland socket is ready here)
@@ -46,6 +57,7 @@ hl.on("hyprland.start", function()
   hl.config({
     input = {
       kb_layout = kb_layout,
+      kb_variant = kb_variant,
       follow_mouse = 1,
       sensitivity = 0,
       touchpad = { natural_scroll = false, disable_while_typing = false }
