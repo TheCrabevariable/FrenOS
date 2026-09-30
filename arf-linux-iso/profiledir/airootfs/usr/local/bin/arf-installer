@@ -14,6 +14,7 @@ set -euo pipefail
 LOG_FILE="/tmp/arf-install.log"
 info()  { gum style ":: $*" --foreground "#00ffff"; }
 ok()    { gum style "==> $*" --foreground "#00ff00" --bold; }
+warn()  { gum style "==> $*" --foreground "#ffff00" --bold >&2; }
 err()   { gum style "==> $*" --foreground "#ff0000" --bold >&2; exit 1; }
 # With set -e, a failing command in run() would exit silently; trap it so we
 # can see exactly where the install died instead of a frozen screen.
@@ -120,6 +121,23 @@ ask() {
   [ -z "$TIMEZONE" ] && TIMEZONE=$(gum input --placeholder "America/New_York" --prompt "Timezone> ")
   [ -z "$TIMEZONE" ] && err "Timezone required"
 
+  # ── Locale ───────────────────────────────────────────────
+  # Controls system language, date format and message language.
+  # Source the list from glibc's /usr/share/i18n/SUPPORTED, NOT
+  # `localectl list-locales` — that only reports locales already generated on
+  # the running system, so on a live ISO it offers just C.UTF-8 and
+  # en_US.UTF-8. SUPPORTED is what locale.gen is generated from, so every entry
+  # here is guaranteed to be compilable. Keep the shortlist as a fallback.
+  LOCALE_CAND=$(awk '$2 == "UTF-8" { print $1 }' /usr/share/i18n/SUPPORTED 2>/dev/null | sort)
+  if [ -z "$LOCALE_CAND" ]; then
+    LOCALE_CAND=$(printf '%s\n' \
+      en_US.UTF-8 en_GB.UTF-8 fr_FR.UTF-8 de_DE.UTF-8 es_ES.UTF-8 it_IT.UTF-8 \
+      pt_BR.UTF-8 nl_NL.UTF-8 pl_PL.UTF-8 ru_RU.UTF-8 tr_TR.UTF-8 ja_JP.UTF-8 \
+      ko_KR.UTF-8 zh_CN.UTF-8)
+  fi
+  LOCALE=$(printf '%s\n' "$LOCALE_CAND" | gum filter --placeholder "Type to search (e.g. fr_FR, de_DE, ja_JP)..." --header "Select system locale" --height 15)
+  [ -z "$LOCALE" ] && LOCALE="en_US.UTF-8"
+
   # ── System choices ───────────────────────────────────────
   FS_CHOICE=$(gum choose "btrfs" "ext4" --header "Filesystem")
   SWAP_CHOICE=$(gum choose "none" "4GB" "8GB" --header "Swap size")
@@ -128,6 +146,9 @@ ask() {
   PARALLEL_DL=$(gum choose "1" "2" "3" "4" --header "Parallel downloads (pacman)")
   KERNEL=$(gum choose --header "Choose kernel" "linux" "linux-zen")
   [ -z "$KERNEL" ] && KERNEL="linux"
+  # "auto" keeps the lspci detection in install.sh. Force a vendor on hybrid
+  # graphics (Intel iGPU + NVIDIA dGPU), where detection depends on PCI order.
+  GPU_CHOICE=$(gum choose "auto" "nvidia" "amd" "intel" --header "Graphics driver (auto = detect)" --selected "auto")
 
   # ── Btrfs follow-ups ─────────────────────────────────────
   SUBVOLUMES="no"
@@ -204,6 +225,7 @@ ask() {
     printf 'USERNAME=%q\n'         "$USERNAME"
     printf 'PASSWORD=%q\n'         "$PASSWORD"
     printf 'TIMEZONE=%q\n'         "$TIMEZONE"
+    printf 'LOCALE=%q\n'           "$LOCALE"
     printf 'FS_CHOICE=%q\n'        "$FS_CHOICE"
     printf 'SUBVOLUMES=%q\n'       "$SUBVOLUMES"
     printf 'SNAPPER=%q\n'          "$SNAPPER"
@@ -212,6 +234,7 @@ ask() {
     printf 'ENCRYPT_CHOICE=%q\n'   "$ENCRYPT_CHOICE"
     printf 'PARALLEL_DL=%q\n'      "$PARALLEL_DL"
     printf 'KERNEL=%q\n'           "$KERNEL"
+    printf 'GPU_CHOICE=%q\n'       "$GPU_CHOICE"
     printf 'DISK=%q\n'             "$DISK"
     printf 'EXTRA_DISKS=%q\n'      "$EXTRA_DISKS"
     printf 'LUKS_PASS=%q\n'        "$LUKS_PASS"
@@ -238,6 +261,8 @@ run() {
   # any of these, and under `set -u` an unset variable is a fatal error that
   # kills the install partway through.
   KBD_LAYOUT="${KBD_LAYOUT:-us}"
+  LOCALE="${LOCALE:-en_US.UTF-8}"
+  GPU_CHOICE="${GPU_CHOICE:-auto}"
   ENCRYPT_CHOICE="${ENCRYPT_CHOICE:-no}"
   SUBVOLUMES="${SUBVOLUMES:-no}"
   SNAPPER="${SNAPPER:-no}"
@@ -394,9 +419,21 @@ MIRROR
   arch-chroot /mnt ln -sf "/usr/share/zoneinfo/$TIMEZONE" /etc/localtime
   arch-chroot /mnt hwclock --systohc || info "hwclock failed (non-fatal) — will set time on first boot"
 
-  sed -i 's/^#en_US.UTF-8/en_US.UTF-8/' /mnt/etc/locale.gen
+  # ── Locale ───────────────────────────────────────────────
+  # Uncomment the chosen locale in locale.gen, and make sure the line exists
+  # even if glibc dropped it from the file. `locale -a` afterwards is a real
+  # check: locale-gen exits 0 even when it compiled nothing, so a typo'd
+  # locale would otherwise silently leave the system in C/POSIX.
+  info "Configuring locale: $LOCALE"
+  sed -i "s/^#${LOCALE}/${LOCALE}/" /mnt/etc/locale.gen
+  grep -q "^${LOCALE}[[:space:]]" /mnt/etc/locale.gen || printf '%s UTF-8\n' "$LOCALE" >> /mnt/etc/locale.gen
   arch-chroot /mnt locale-gen
-  echo "LANG=en_US.UTF-8" > /mnt/etc/locale.conf
+  printf 'LANG=%s\n' "$LOCALE" > /mnt/etc/locale.conf
+  if arch-chroot /mnt locale -a | cut -d. -f1 | grep -qxF "${LOCALE%%.*}"; then
+    ok "Locale set ($LOCALE)"
+  else
+    warn "locale-gen did not produce $LOCALE — system messages will stay in English"
+  fi
 
   echo "$HOSTNAME" > /mnt/etc/hostname
   cat > /mnt/etc/hosts <<HOSTS
@@ -499,6 +536,7 @@ HOSTS
     echo "ENCRYPTED=$ENCRYPT_CHOICE"
     echo "ZRAM_CHOICE=$ZRAM_CHOICE"
     echo "KBD_LAYOUT=$KBD_LAYOUT"
+    echo "GPU_CHOICE=$GPU_CHOICE"
     [ -n "$LUKS_UUID" ] && echo "LUKS_UUID=$LUKS_UUID"
   } > /mnt/etc/arf-linux.env
 
@@ -537,7 +575,7 @@ SERVICE
   info "Running stage2 in chroot..."
   cp /etc/resolv.conf /mnt/etc/resolv.conf 2>/dev/null || true
   if arch-chroot /mnt bash -c "
-    export USERNAME=$USERNAME HOME=/home/$USERNAME PARALLEL_DL=$PARALLEL_DL FS_CHOICE=$FS_CHOICE ENCRYPTED=$ENCRYPT_CHOICE LUKS_UUID=$LUKS_UUID ZRAM_CHOICE=$ZRAM_CHOICE KBD_LAYOUT=$KBD_LAYOUT
+    export USERNAME=$USERNAME HOME=/home/$USERNAME PARALLEL_DL=$PARALLEL_DL FS_CHOICE=$FS_CHOICE ENCRYPTED=$ENCRYPT_CHOICE LUKS_UUID=$LUKS_UUID ZRAM_CHOICE=$ZRAM_CHOICE KBD_LAYOUT=$KBD_LAYOUT GPU_CHOICE=$GPU_CHOICE
     bash /home/$USERNAME/arf-linux/install.sh --stage2
   " 2>&1; then
     ok "Stage2 complete"

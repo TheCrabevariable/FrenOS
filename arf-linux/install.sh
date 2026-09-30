@@ -6,9 +6,10 @@ set -euo pipefail
 # Usage: bash install.sh
 # ────────────────────────────────────────────────────────────────
 
-RED='\033[0;31m'; GREEN='\033[0;32m'; CYAN='\033[0;36m'; NC='\033[0m'
+RED='\033[0;31m'; GREEN='\033[0;32m'; YELLOW='\033[0;33m'; CYAN='\033[0;36m'; NC='\033[0m'
 info()  { printf "${CYAN}::${NC} %s\n" "$*"; }
 ok()    { printf "${GREEN}==>${NC} %s\n" "$*"; }
+warn()  { printf "${YELLOW}==>${NC} %s\n" "$*" >&2; }
 err()   { printf "${RED}==>${NC} %s\n" "$*" >&2; exit 1; }
 
 # ── Config ────────────────────────────────────────────────────
@@ -16,6 +17,7 @@ err()   { printf "${RED}==>${NC} %s\n" "$*" >&2; exit 1; }
 # If running manually, they default to the current user.
 USERNAME="${USERNAME:-$USER}"
 KBD_LAYOUT="${KBD_LAYOUT:-us}"
+GPU_CHOICE="${GPU_CHOICE:-auto}"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 DOTFILES="$SCRIPT_DIR/dotfiles"
 USER_HOME=$(eval echo "~$USERNAME")
@@ -142,26 +144,44 @@ stage2() {
   sed -i 's/^PRETTY_NAME="Arch Linux"/PRETTY_NAME="FrenOS (Arch Linux)"/' /etc/os-release 2>/dev/null || true
 
   # ── Graphics drivers (before Steam so no prompt) ──────────────
+  # GPU_CHOICE comes from the installer: "auto" keeps lspci detection, while
+  # nvidia/amd/intel force that vendor. Forcing is the only way to get hybrid
+  # graphics right — on an Optimus laptop `head -1` just returns whichever GPU
+  # happens to come first in PCI order, and the answer can change across boots.
   info "Detecting GPU and installing drivers..."
-  GPU_VENDOR=$(lspci -k | grep -E "(VGA|3D)" | grep -iEo "(nvidia|amd|intel)" | head -1 | tr '[:upper:]' '[:lower:]')
+  case "${GPU_CHOICE:-auto}" in
+    nvidia|amd|intel)
+      GPU_VENDOR="$GPU_CHOICE"
+      GPU_SRC="forced at install"
+      ;;
+    auto|"")
+      GPU_VENDOR=$(lspci -k | grep -E "(VGA|3D)" | grep -iEo "(nvidia|amd|intel)" | head -1 | tr '[:upper:]' '[:lower:]')
+      GPU_SRC="auto-detected"
+      ;;
+    *)
+      warn "Unknown GPU_CHOICE '$GPU_CHOICE' — falling back to auto-detection"
+      GPU_VENDOR=$(lspci -k | grep -E "(VGA|3D)" | grep -iEo "(nvidia|amd|intel)" | head -1 | tr '[:upper:]' '[:lower:]')
+      GPU_SRC="auto-detected"
+      ;;
+  esac
   DRIVERS=()
 
   case "$GPU_VENDOR" in
     nvidia)
       DRIVERS+=(nvidia-dkms nvidia-utils lib32-nvidia-utils nvidia-settings)
-      ok "NVIDIA GPU detected — installing proprietary drivers"
+      ok "NVIDIA GPU ($GPU_SRC) — installing proprietary drivers"
       ;;
     amd)
       DRIVERS+=(mesa lib32-mesa vulkan-radeon lib32-vulkan-radeon xf86-video-amdgpu)
-      ok "AMD GPU detected — installing Mesa + Vulkan"
+      ok "AMD GPU ($GPU_SRC) — installing Mesa + Vulkan"
       ;;
     intel)
       DRIVERS+=(mesa lib32-mesa vulkan-intel lib32-vulkan-intel xf86-video-intel)
-      ok "Intel GPU detected — installing Mesa + Vulkan"
+      ok "Intel GPU ($GPU_SRC) — installing Mesa + Vulkan"
       ;;
     *)
       DRIVERS+=(mesa lib32-mesa)
-      ok "No discrete GPU detected — installing Mesa (fallback)"
+      ok "No discrete GPU found ($GPU_SRC) — installing Mesa (fallback)"
       ;;
   esac
 

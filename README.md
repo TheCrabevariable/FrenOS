@@ -22,7 +22,7 @@ FrenOS is a flavour of Arch Linux that i made with what i like about it, and i b
 
 ## Features
 
-- **Automated install** — interactive stage1 with keyboard layout, disk selection, swap size, kernel choice, user setup, timezone
+- **Automated install** — interactive stage1 with keyboard layout, disk selection, swap size, kernel choice, graphics driver, user setup, timezone, system locale
 - **Single reboot** — stage2 can run in chroot during install, or on first boot via systemd oneshot
 - **Tokyo Night theme** — dark theme across bar, kitty, fastfetch, fren, btop, zed, GTK3/GTK4 and Qt (Kvantum) apps; theme switcher (SUPER+T) toggles wallpaper, GTK/Qt theme, and Hypr border colors live
 - **Quickshell bar** — app launcher (SUPER+R), theme switcher (SUPER+T), monitor manager (SUPER+D), dashboard (SUPER+B), power menu (SUPER+ESC), clickable WiFi/BT/brightness/power pills with popups, color-coded CPU, clipboard manager, media player (mpd-mpris), calendar, audio mixer, notification center, network popup, OSD for volume/brightness keys
@@ -72,7 +72,11 @@ Requires `archiso` on an Arch Linux system. Output: `out/frenos-<YYYY.MM>-x86_64
 
 1. Write ISO to USB: `sudo dd if=frenos-<YYYY.MM>-x86_64.iso of=/dev/sdX bs=4M status=progress && sync`
 2. Boot from USB — `arf-installer` auto-launches
-3. Follow prompts: keyboard layout → disk → swap (none/4GB/8GB) → WiFi (optional) → kernel → hostname/user/password/timezone → extra disks to automount (optional) → confirm wipe
+3. Follow prompts: keyboard layout → disk → swap (none/4GB/8GB) → WiFi (optional) → kernel → graphics driver → hostname/user/password/timezone → system locale → extra disks to automount (optional) → confirm wipe
+
+   Set the graphics driver to anything other than `auto` on hybrid-graphics
+   laptops (Intel iGPU + NVIDIA dGPU), where auto-detection just picks whichever
+   GPU comes first in PCI order and can change between boots.
 4. Reboot → SDDM → Hyprland + Quickshell bar (stage2 runs as systemd oneshot on first boot)
 
 ## Custom Commands
